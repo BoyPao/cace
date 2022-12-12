@@ -97,7 +97,7 @@ endfunction
 
 " Auto update/generate ctags and cscope
 function! GetCscopeDBPath()
-	let db = findfile("cscope.out", ".;")
+	let db = findfile("cscope.out", getcwd() . ";")
 	let dbpath = getcwd()
 	if (!empty(db))
 		if (db != "cscope.out")
