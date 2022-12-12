@@ -54,10 +54,10 @@ endfunction
 
 function! VimgrepInPrj(target)
 	let curpath = getcwd()
-	exe "cd" . GetCscopeDBPath()
+	exe "cd " . GetCscopeDBPath()
 	echohl PreCondit | echo " Searching ..." | echohl None
 	exe "silent vimgrep /" . a:target . "/j **/*.c **/*.cpp **/*.h **/*.hpp **/*.dtsi **/*.dts"
-	exe "cd" . curpath
+	exe "cd " . curpath
 	let @/ = a:target
 	exe "copen"
 endfunction
@@ -110,7 +110,7 @@ endfunction
 function! UpdateCscopeDB()
 	let curcwd = getcwd()
 	echohl PreCondit | echo " Updating tags & cscope, please wait ..." | echohl None
-	exe "cd" . GetCscopeDBPath()
+	exe "cd " . GetCscopeDBPath()
 	call delete('cscope.tags.lst')
 	call delete('cscope.in.out')
 	call delete('cscope.out')
@@ -124,7 +124,7 @@ function! UpdateCscopeDB()
 	call system(cmd)
 	silent exe "cs reset"
 	call LoadCscope()
-	exe "cd" . curcwd
+	exe "cd " . curcwd
 	echohl Identifier | echo " Updating finished" | echohl None
 	echo "Working path:"getcwd()"\nDB info:\n"
 	exe "cs show"
