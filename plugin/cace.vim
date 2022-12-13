@@ -31,13 +31,13 @@ nnoremap <silent> zf :call CscopeSearch('f', expand("<cfile>"))<CR>
 " find who include target file
 nnoremap <silent> zi :call CscopeSearch('i', expand("<cfile>"))<CR>
 " Auto generate/update cscope DB
-map <silent> <C-@> :call UpdateCscopeDB()<CR>
+map <silent> <C-@> :call CACEUpdateDB()<CR>
 
 " Use vimgrep for string search
 cno vg call VimgrepInPrj("") <left><left><left>
 
 " Auto load cscope db while opening a buffer
-autocmd BufEnter /* call LoadCscope()
+autocmd BufEnter /* call CACELoadDB()
 
 
 let g:cqswitch="OFF"
@@ -54,15 +54,15 @@ endfunction
 
 function! VimgrepInPrj(target)
 	let curpath = getcwd()
-	exe "cd " . GetCscopeDBPath()
+	exe "cd " . CACEGetDBPath()
 	echohl PreCondit | echo " Searching ..." | echohl None
-	exe "silent vimgrep /" . a:target . "/j **/*.c **/*.cpp **/*.h **/*.hpp **/*.dtsi **/*.dts"
+	exe "silent vimgrep /" . a:target . CACEGenerateCMD("CACECMD_GREPTAR")
 	exe "cd " . curpath
 	let @/ = a:target
 	exe "copen"
 endfunction
 
-function VisualSearch(direction) range
+function! VisualSearch(direction) range
 	let reg = @0
 	if a:direction == 'vg'
 		call VimgrepInPrj(reg)
@@ -83,7 +83,7 @@ function! CscopeSearch(mode, target)
 	endif
 endfunction
 
-function! LoadCscope()
+function! CACELoadDB()
 	let db = findfile("cscope.out", ".;")
 	if (!empty(db))
 		let path = strpart(db, 0, match(db, "/cscope.out$"))
@@ -95,8 +95,77 @@ function! LoadCscope()
 	endif
 endfunction
 
-" Auto update/generate ctags and cscope
-function! GetCscopeDBPath()
+let g:caceUseC=1
+let g:caceUseCpp=1
+let g:caceUseMK=1
+let g:caceUseDevTree=1
+let g:caceInfoEveryTime = 1
+
+let g:caceCTarget		= ["*.h", "*.c"]
+let g:caceCppTarget		= ["*.hpp", "*.cpp", "*.cc"]
+let g:caceMKTarget		= ["Makefile", "*.mk"]
+let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
+
+let g:caceDBName = ['cscope.tags.lst', 'cscope.in.out', 'cscope.out', 'cscope.po.out', 'tags']
+
+function! CACEGetTargetLists()
+	let tlist = []
+	if g:caceUseC == 1
+		call add(tlist, g:caceCTarget	   )
+	endif
+	if g:caceUseCpp == 1
+		call add(tlist, g:caceCppTarget	   )
+	endif
+	if g:caceUseMK == 1
+		call add(tlist, g:caceMKTarget	   )
+	endif
+	if g:caceUseDevTree == 1
+		call add(tlist, g:caceDevTreeTarget)
+	endif
+	return tlist
+endfunction
+
+function! CACEGenerateCMD(cmdtype)
+	let tlists = CACEGetTargetLists()
+	let cmdlist = []
+	let cmd = ""
+	if a:cmdtype == "CACECMD_DBLIST"
+		call add(cmdlist, "find -name")
+		let type = 0
+		while type < len(tlists)
+			let index = 0
+			while index < len(tlists[type])
+				let item = tlists[type][index]
+				let isfirst = type + index
+				if isfirst > 0
+					call add(cmdlist, "-o -name")
+				endif
+				call add(cmdlist,'"' . item . '"')
+				let index = index + 1
+			endwhile
+			let type = type + 1
+		endwhile
+		call add(cmdlist, "> cscope.tags.lst")
+	elseif a:cmdtype == "CACECMD_GREPTAR"
+		call add(cmdlist, "/j")
+		let type = 0
+		while type < len(tlists)
+			let index = 0
+			while index < len(tlists[type])
+				let item = tlists[type][index]
+				call add(cmdlist,'**/' . item)
+				let index = index + 1
+			endwhile
+			let type = type + 1
+		endwhile
+	else
+		echo "Unknown CMD tyep:"a:cmdtype
+	endif
+	let cmd = join(cmdlist)
+	return cmd
+endfunction
+
+function! CACEGetDBPath()
 	let db = findfile("cscope.out", getcwd() . ";")
 	let dbpath = getcwd()
 	if (!empty(db))
@@ -107,29 +176,29 @@ function! GetCscopeDBPath()
 	return dbpath
 endfunction
 
-function! UpdateCscopeDB()
-	let curcwd = getcwd()
-	echohl PreCondit | echo " Updating tags & cscope, please wait ..." | echohl None
-	exe "cd " . GetCscopeDBPath()
-	call delete('cscope.tags.lst')
-	call delete('cscope.in.out')
-	call delete('cscope.out')
-	call delete('cscope.po.out')
-	call delete('tags')
-	let cmd='find -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.dtsi" -o -name "*.dts" -o -name "Makefile" -o -name "*.mk" > cscope.tags.lst'
-	call system(cmd)
-	let cmd='ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst'
-	call system(cmd)
-	let cmd='cscope -bkq -i cscope.tags.lst'
-	call system(cmd)
-	silent exe "cs reset"
-	call LoadCscope()
-	exe "cd " . curcwd
-	echohl Identifier | echo " Updating finished" | echohl None
-	echo "Working path:"getcwd()"\nDB info:\n"
-	exe "cs show"
+function! CACECleanDB()
+	for item in g:caceDBName
+		call delete(item)
+	endfor
 endfunction
 
-" ctags config
+function! CACEUpdateDB()
+	let curcwd = getcwd()
+	echohl PreCondit | echo " Updating tags & cscope, please wait ..." | echohl None
+	exe "cd " . CACEGetDBPath()
+	call CACECleanDB()
+	call system(CACEGenerateCMD("CACECMD_DBLIST"))
+	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
+	call system('cscope -bkq -i cscope.tags.lst')
+	silent exe "cs reset"
+	call CACELoadDB()
+	exe "cd " . curcwd
+	echohl Identifier | echo " Updating finished" | echohl None
+	if g:caceInfoEveryTime == 1
+		echo "Working path:"getcwd()"\n DB info:\n"
+		exe "cs show"
+	endif
+endfunction
+
 set tags=tags;
 
