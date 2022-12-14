@@ -6,66 +6,91 @@
 " Copyright (c) 2021 Peng Hao <635945005@qq.com>
 
 " Use vimgrep to search current word, better to use it with cscope in project root
-nnoremap <silent> <leader>zt :call VimgrepInPrj(expand("<cword>"))<CR>
+nnoremap <silent> <leader>zt :call <SID>CACESearch(expand("<cword>"))<CR>
 " use n/N/<leader>g to search current selection in visual mode, better to use it with cscope in project root
-vnoremap <silent> <leader>zt y:call VisualSearch('vg')<CR>
-vnoremap <silent> n y:call VisualSearch('f')<CR>
-vnoremap <silent> N y:call VisualSearch('b')<CR>
+vnoremap <silent> <leader>zt y:call <SID>CACEVisualSearch('vg')<CR>
+vnoremap <silent> n y:call <SID>CACEVisualSearch('f')<CR>
+vnoremap <silent> N y:call <SID>CACEVisualSearch('b')<CR>
 " On/off cscopequickfix
-nmap <leader>cq :call SwitchCscopeQuickfix()<CR>
+nmap <leader>cq :call <SID>CACECscopeQuickfixTrigger()<CR>
 " Cscope key map
 " find define
-nnoremap <silent> zg :call CscopeSearch('g', expand("<cword>"))<CR>
+nnoremap <silent> zg :call <SID>CACEcscopeFind('g', expand("<cword>"))<CR>
 " find who calls
-nnoremap <silent> zc :call CscopeSearch('c', expand("<cword>"))<CR>
+nnoremap <silent> zc :call <SID>CACEcscopeFind('c', expand("<cword>"))<CR>
 " find text
-nnoremap <silent> zt :call CscopeSearch('t', expand("<cword>"))<CR>
+nnoremap <silent> zt :call <SID>CACEcscopeFind('t', expand("<cword>"))<CR>
 " find symble
-nnoremap <silent> zs :call CscopeSearch('s', expand("<cword>"))<CR>
+nnoremap <silent> zs :call <SID>CACEcscopeFind('s', expand("<cword>"))<CR>
 " find who is called by selected
-nnoremap <silent> zd :call CscopeSearch('d', expand("<cword>"))<CR>
+nnoremap <silent> zd :call <SID>CACEcscopeFind('d', expand("<cword>"))<CR>
 " metch with egrep mode
-nnoremap <silent> ze :call CscopeSearch('e', expand("<cword>"))<CR>
+nnoremap <silent> ze :call <SID>CACEcscopeFind('e', expand("<cword>"))<CR>
 " find and open target file
-nnoremap <silent> zf :call CscopeSearch('f', expand("<cfile>"))<CR>
+nnoremap <silent> zf :call <SID>CACEcscopeFind('f', expand("<cfile>"))<CR>
 " find who include target file
-nnoremap <silent> zi :call CscopeSearch('i', expand("<cfile>"))<CR>
+nnoremap <silent> zi :call <SID>CACEcscopeFind('i', expand("<cfile>"))<CR>
 " Auto generate/update cscope DB
-map <silent> <C-@> :call CACEUpdateDB()<CR>
+map <silent> <C-@> :call <SID>CACEUpdateDB()<CR>
 
 " Use vimgrep for string search
-cno vg call VimgrepInPrj("") <left><left><left>
+cno vg call <SID>CACESearch("") <left><left><left>
 
 " Auto load cscope db while opening a buffer
-autocmd BufEnter /* call CACELoadDB()
+autocmd BufEnter /* call <SID>CACELoadDB()
 
 
-let g:cqswitch="OFF"
-function! SwitchCscopeQuickfix()
+set tags=tags;
+
+if !exists(':CACEUpdate')
+	command! CACEUpdate call <SID>CACEUpdateDB()
+endif
+
+if !exists(':CACEClean')
+	command! CACEClean call <SID>CACECleanDB()
+endif
+
+if !exists('g:caceInfoEveryTime')
+	let g:caceInfoEveryTime = 0
+endif
+
+if !exists('g:caceUseC')
+	let g:caceUseC=1
+endif
+if !exists('g:caceUseCpp')
+	let g:caceUseCpp=1
+endif
+if !exists('g:caceUseMK')
+	let g:caceUseMK=1
+endif
+if !exists('g:caceUseDevTree')
+	let g:caceUseDevTree=1
+endif
+
+function! <SID>CACECscopeQuickfixTrigger()
 	if &cscopequickfix==""
-		set cscopequickfix=s-,c-,d-,i-,t-,e-
-		let g:cqswitch="ON"
+		setlocal cscopequickfix=s-,c-,d-,i-,t-,e-
 	else
-		set cscopequickfix=
-		let g:cqswitch="OFF"
+		setlocal cscopequickfix=
 	endif
-	echo "cscopequickfix="&cscopequickfix
+	call <SID>LOG("cscopequickfix=" . &cscopequickfix)
 endfunction
 
-function! VimgrepInPrj(target)
+function! <SID>CACESearch(target)
 	let curpath = getcwd()
-	exe "cd " . CACEGetDBPath()
-	echohl PreCondit | echo " Searching ..." | echohl None
-	exe "silent vimgrep /" . a:target . CACEGenerateCMD("CACECMD_GREPTAR")
+	exe "cd " . <SID>CACEGetDBPath()
+	call <SID>LOGI(" Searching ...")
+	exe "silent vimgrep /" . a:target . <SID>CACEGenerateCMD("CACECMD_GREPTAR")
+	call <SID>LOGS(" Searching Done")
 	exe "cd " . curpath
 	let @/ = a:target
 	exe "copen"
 endfunction
 
-function! VisualSearch(direction) range
+function! <SID>CACEVisualSearch(direction)
 	let reg = @0
 	if a:direction == 'vg'
-		call VimgrepInPrj(reg)
+		call <SID>CACESearch(reg)
 	else
 		if a:direction == 'b'
 			exe "normal ?" . reg . "\n"
@@ -76,30 +101,24 @@ function! VisualSearch(direction) range
 	endif
 endfunction
 
-function! CscopeSearch(mode, target)
+function! <SID>CACEcscopeFind(mode, target)
 	exe "cs find " . a:mode a:target
 	if &cscopequickfix !=""
 		exe "cw"
 	endif
 endfunction
 
-function! CACELoadDB()
+function! <SID>CACELoadDB()
 	let db = findfile("cscope.out", ".;")
 	if (!empty(db))
 		let path = strpart(db, 0, match(db, "/cscope.out$"))
-		set nocscopeverbose " suppress 'duplicate connection' error
+		setlocal nocscopeverbose " suppress 'duplicate connection' error
 		exe "cs add " . db . " " . path
-		set cscopeverbose " else add the database pointed to by environment variable
+		setlocal cscopeverbose " else add the database pointed to by environment variable
 	elseif $CSCOPE_DB != ""
 		cs add $CSCOPE_DB
 	endif
 endfunction
-
-let g:caceUseC=1
-let g:caceUseCpp=1
-let g:caceUseMK=1
-let g:caceUseDevTree=1
-let g:caceInfoEveryTime = 1
 
 let g:caceCTarget		= ["*.h", "*.c"]
 let g:caceCppTarget		= ["*.hpp", "*.cpp", "*.cc"]
@@ -108,7 +127,7 @@ let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
 
 let g:caceDBName = ['cscope.tags.lst', 'cscope.in.out', 'cscope.out', 'cscope.po.out', 'tags']
 
-function! CACEGetTargetLists()
+function! <SID>CACEGetTargetLists()
 	let tlist = []
 	if g:caceUseC == 1
 		call add(tlist, g:caceCTarget	   )
@@ -125,8 +144,8 @@ function! CACEGetTargetLists()
 	return tlist
 endfunction
 
-function! CACEGenerateCMD(cmdtype)
-	let tlists = CACEGetTargetLists()
+function! <SID>CACEGenerateCMD(cmdtype)
+	let tlists = <SID>CACEGetTargetLists()
 	let cmdlist = []
 	let cmd = ""
 	if a:cmdtype == "CACECMD_DBLIST"
@@ -159,13 +178,13 @@ function! CACEGenerateCMD(cmdtype)
 			let type = type + 1
 		endwhile
 	else
-		echo "Unknown CMD tyep:"a:cmdtype
+		call <SID>LOGE("Unknown CMD tyep:" . a:cmdtype)
 	endif
 	let cmd = join(cmdlist)
 	return cmd
 endfunction
 
-function! CACEGetDBPath()
+function! <SID>CACEGetDBPath()
 	let db = findfile("cscope.out", getcwd() . ";")
 	let dbpath = getcwd()
 	if (!empty(db))
@@ -176,29 +195,42 @@ function! CACEGetDBPath()
 	return dbpath
 endfunction
 
-function! CACECleanDB()
+function! <SID>CACECleanDB()
 	for item in g:caceDBName
 		call delete(item)
 	endfor
 endfunction
 
-function! CACEUpdateDB()
+function! <SID>CACEUpdateDB()
 	let curcwd = getcwd()
-	echohl PreCondit | echo " Updating tags & cscope, please wait ..." | echohl None
-	exe "cd " . CACEGetDBPath()
-	call CACECleanDB()
-	call system(CACEGenerateCMD("CACECMD_DBLIST"))
+	call <SID>LOGI(" Updating tags & cscope, please wait ...")
+	exe "cd " . <SID>CACEGetDBPath()
+	call <SID>CACECleanDB()
+	call system(<SID>CACEGenerateCMD("CACECMD_DBLIST"))
 	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
 	call system('cscope -bkq -i cscope.tags.lst')
 	silent exe "cs reset"
-	call CACELoadDB()
+	call <SID>CACELoadDB()
 	exe "cd " . curcwd
-	echohl Identifier | echo " Updating finished" | echohl None
+	call <SID>LOGS(" Updating finished")
 	if g:caceInfoEveryTime == 1
-		echo "Working path:"getcwd()"\n DB info:\n"
+		call <SID>LOG(" Working path:"getcwd()"\n DB info:\n")
 		exe "cs show"
 	endif
 endfunction
 
-set tags=tags;
-
+function! <SID>LOG(str)
+	echo a:str
+endfunction
+function! <SID>LOGI(str)
+	echohl PreCondit | echo a:str | echohl None
+endfunction
+function! <SID>LOGW(str)
+	echohl WarningMsg | echo a:str | echohl None
+endfunction
+function! <SID>LOGE(str)
+	echohl ErrorMsg | echo a:str | echohl None
+endfunction
+function! <SID>LOGS(str)
+	echohl Identifier | echo a:str | echohl None
+endfunction
