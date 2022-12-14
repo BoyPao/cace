@@ -214,7 +214,7 @@ function! <SID>CACEUpdateDB()
 	exe "cd " . curcwd
 	call <SID>LOGS(" Updating finished")
 	if g:caceInfoEveryTime == 1
-		call <SID>LOG(" Working path:"getcwd()"\n DB info:\n")
+		call <SID>LOG(" Working path:" . getcwd() . "\n DB info:\n")
 		exe "cs show"
 	endif
 endfunction
