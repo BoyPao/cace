@@ -13,7 +13,7 @@ Copyright (c) 2021 Peng Hao <635945005@qq.com>
 # Installation
 - Instal manually
 ```
-git clone https://github.com/BoyPao/cace
+git clone git@github.com:BoyPao/cace.git
 cp cace.vim ~/.vim/plugin
 ```
 - Instal by vim-plug (recommanded)
