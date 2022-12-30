@@ -11,12 +11,12 @@ Copyright (c) 2021 Peng Hao <635945005@qq.com>
 - Provide command to search string.
 
 # Installation
-- Instal manually
+- Install manually
 ```
 git clone git@github.com:BoyPao/cace.git
 cp cace.vim ~/.vim/plugin
 ```
-- Instal by vim-plug (recommanded)
+- Install by vim-plug (recommanded)
 ```
 Plug 'BoyPao/cace'
 ```

@@ -15,11 +15,11 @@
 "==============================================================================
 " Installation:
 "==============================================================================
-" > Instal manually
+" > Install manually
 "     git clone git@github.com:BoyPao/cace.git
 "     cp cace.vim ~/.vim/plugin
 "
-" > Instal by vim-plug (recommanded)
+" > Install by vim-plug (recommanded)
 "     Plug 'BoyPao/cace'
 
 "==============================================================================
@@ -43,7 +43,7 @@
 "
 " > CACEUFind
 "     This command executes cscope find command, it wraps cscopequickfix open
-"     operation. if cscopequickfix is on, result will be displayed in quickfix
+"     operation. If cscopequickfix is on, result will be displayed in quickfix
 "     window, and quickfix window will be open.
 "     Example:
 "             :CACEFind t hello
