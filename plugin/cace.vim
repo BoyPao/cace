@@ -16,7 +16,7 @@
 " Installation:
 "==============================================================================
 " > Install manually
-"     git clone git@github.com:BoyPao/cace.git
+"     git clone --depth=1 https://github.com/BoyPao/cace.git
 "     cp cace.vim ~/.vim/plugin
 "
 " > Install by vim-plug (recommanded)
