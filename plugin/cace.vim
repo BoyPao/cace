@@ -25,7 +25,7 @@
 "==============================================================================
 " Commands:
 "==============================================================================
-" > CACEUpdate
+" > caceupdate
 "     This command helps user to generate/update cscope and ctags database. It
 "     will search database from current working path upward. If a database is
 "     found, it will update original database. If not, a new database will be
@@ -33,33 +33,33 @@
 "     If user want to create database for a new project, it is suggested to
 "     use this command at project root.
 "
-" > CACEClean
+" > caceclean
 "     This command helps to find then delete the cscope and ctags database.
 "
-" > CACEGrep
+" > cacegrep
 "     This command executes vimgrep from cscope database directory for target
 "     string. If cscope database locates at project root, this command will be
 "     helpful when searching string under project in vim.
 "
-" > CACEUFind
+" > cacefind
 "     This command executes cscope find command, it wraps cscopequickfix open
 "     operation. If cscopequickfix is on, result will be displayed in quickfix
 "     window, and quickfix window will be open.
 "     Example:
-"             :CACEFind t hello
+"             :cacefind t hello
 "         performs like:
 "             :cs find t hello
 "     It is recommand to map this command follow below methmod:
-"         nnoremap <silent> zg :CACEFind g <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> zc :CACEFind c <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> zt :CACEFind t <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> zs :CACEFind s <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> zd :CACEFind d <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> ze :CACEFind e <C-R>=expand("<cword>")<CR><CR>
-"         nnoremap <silent> zf :CACEFind f <C-R>=expand("<cfile>")<CR><CR>
-"         nnoremap <silent> zi :CACEFind i <C-R>=expand("<cfile>")<CR><CR>
+"         nnoremap <silent> zg :cacefind g <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> zc :cacefind c <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> zt :cacefind t <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> zs :cacefind s <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> zd :cacefind d <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> ze :cacefind e <C-R>=expand("<cword>")<CR><CR>
+"         nnoremap <silent> zf :cacefind f <C-R>=expand("<cfile>")<CR><CR>
+"         nnoremap <silent> zi :cacefind i <C-R>=expand("<cfile>")<CR><CR>
 "
-" > CACEQuickfixTrigger
+" > cacequickfixtrigger
 "     This command is a switch of cscopequickfix.
 "
 
@@ -68,46 +68,46 @@
 "==============================================================================
 " > g:caceInfoEveryTime
 "     If g:caceInfoEveryTime equals to 1, cscope database loading information
-"     will be display every time when CACEUpdate executed. The default value
+"     will be display every time when caceupdate executed. The default value
 "     is 0.
 "
 " > g:caceUseC
-"     It supports C language while executing CACEUpdate. The default value is
+"     It supports C language while executing caceupdate. The default value is
 "     1.
 "
 " > g:caceUseCpp
-"     It supports Cpp language while executing CACEUpdate. The default value is
+"     It supports Cpp language while executing caceupdate. The default value is
 "     1.
 "
 " > g:caceUseMK
-"     It supports makefile language while executing CACEUpdate. The default
+"     It supports makefile language while executing caceupdate. The default
 "     value is 1.
 "
 " > g:caceUseDevTree
-"     It supports arm device tree language while executing CACEUpdate. The
+"     It supports arm device tree language while executing caceupdate. The
 "     default value is 1.
 
 autocmd BufEnter /* call <SID>CACELoadDB()
 set tags=tags;
 
-if !exists(':CACEUpdate')
-	command! CACEUpdate call <SID>CACEUpdateDB()
+if !exists(':caceupdate')
+	command! caceupdate call <SID>CACEUpdateDB()
 endif
 
-if !exists(':CACEClean')
-	command! CACEClean call <SID>CACECleanDB()
+if !exists(':caceclean')
+	command! caceclean call <SID>CACECleanDB()
 endif
 
-if !exists(':CACEGrep')
-	command! -nargs=1 CACEGrep call <SID>CACEGrepFunc(<q-args>)
+if !exists(':cacegrep')
+	command! -nargs=1 cacegrep call <SID>CACEGrepFunc(<q-args>)
 endif
 
-if !exists(':CACEFind')
-	command! -nargs=+ CACEFind call <SID>CACEcscopeFind(<f-args>)
+if !exists(':cacefind')
+	command! -nargs=+ cacefind call <SID>CACEcscopeFind(<f-args>)
 endif
 
-if !exists(':CACEQuickfixTrigger')
-	command! CACEQuickfixTrigger call <SID>CACECscopeQuickfixTrigger()
+if !exists(':cacequickfixtrigger')
+	command! cacequickfixtrigger call <SID>CACECscopeQuickfixTrigger()
 endif
 
 if !exists('g:caceInfoEveryTime')
