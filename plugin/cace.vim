@@ -305,7 +305,7 @@ function! <SID>LOG(str)
 endfunction
 function! <SID>LOGI(str)
 	redraw
-	echohl PreCondit | echo a:str | echohl None
+	echohl Type | echo a:str | echohl None
 endfunction
 function! <SID>LOGW(str)
 	echohl WarningMsg | echo a:str | echohl None
@@ -315,5 +315,5 @@ function! <SID>LOGE(str)
 endfunction
 function! <SID>LOGS(str)
 	redraw
-	echohl Identifier | echo a:str | echohl None
+	echohl Comment | echo a:str | echohl None
 endfunction
