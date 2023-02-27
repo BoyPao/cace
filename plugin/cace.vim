@@ -110,6 +110,10 @@ if !exists(':Cacequickfixtrigger')
 	command! Cacequickfixtrigger call <SID>CACECscopeQuickfixTrigger()
 endif
 
+if !exists(':Cacehletrigger')
+	command! Cacehletrigger call <SID>CACEHLEnhanceTrigger()
+endif
+
 if !exists('g:caceInfoEveryTime')
 	let g:caceInfoEveryTime = 0
 endif
@@ -127,13 +131,19 @@ if !exists('g:caceUseDevTree')
 	let g:caceUseDevTree=1
 endif
 if !exists('g:caceHightlightEnhance')
-    let g:caceHightlightEnhance=1
+    let g:caceHightlightEnhance=0
 endif
 
 let g:caceCTarget		= ["*.h", "*.c"]
 let g:caceCppTarget		= ["*.hpp", "*.cpp", "*.cc"]
 let g:caceMKTarget		= ["Makefile", "*.mk"]
 let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
+
+hi CACECTagsClass		guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
+hi CACECTagsStruct      guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
+hi CACECTagsEnumName	guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
+hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 ctermbg=NONE cterm=NONE
+hi CACECTagsMacro		guifg=#a45ed6 guibg=NONE guisp=NONE gui=NONE ctermfg=134 ctermbg=NONE cterm=NONE
 
 function! <SID>CACECscopeQuickfixTrigger()
 	if &cscopequickfix==""
@@ -295,15 +305,79 @@ function! <SID>CACEUpdateDB()
 	call <SID>LOGI(" Updating tags & cscope, please wait ...")
 	call system('cscope -bkq -i cscope.tags.lst')
 	call <SID>LOGI(" Updating tags & cscope, please wait ....")
+	call <SID>CACEParseCtag()
+	call <SID>LOGI(" Updating tags & cscope, please wait .....")
 	silent exe "cs reset"
 	call <SID>CACELoadDB()
-	call <SID>LOGI(" Updating tags & cscope, please wait .....")
+	call <SID>LOGI(" Updating tags & cscope, please wait ......")
 	exe "cd " . curcwd
 	call <SID>LOGS(" Updating finished")
 	if g:caceInfoEveryTime == 1
 		call <SID>LOG(" Working path:" . getcwd() . "\n DB info:\n")
 		exe "cs show"
 	endif
+endfunction
+
+let g:caceCtagsDict		= {}
+
+function! <SID>CACEHLEnhanceTrigger()
+	if g:caceHightlightEnhance==0
+		let g:caceHightlightEnhance=1
+		call <SID>LOGI("Highlight enhance " . "ON")
+	else
+		let g:caceHightlightEnhance=0
+		call <SID>LOGI("Highlight enhance " . "OFF")
+	endif
+endfunction
+
+function! <SID>CACEHighlightTarget(group, pattern)
+	exe "syntax match " . a:group . " " . a:pattern
+endfunction
+
+function! <SID>CACEHightlightCtags()
+	let keys = keys(g:caceCtagsDict)
+	for key in keys
+		let tagtype = g:caceCtagsDict[key]
+		if tagtype == "c"
+			call <SID>CACEHighlightTarget("CACECTagsClass", "/\\<" . key . "\\+\\s*(\\@!/")
+		elseif tagtype == "s"
+			call <SID>CACEHighlightTarget("CACECTagsStruct", "/\\<" . key . "\\>/")
+		elseif tagtype == "g"
+			call <SID>CACEHighlightTarget("CACECTagsEnumName", "/\\<" . key . "\\>/")
+		elseif tagtype == "e"
+			call <SID>CACEHighlightTarget("CACECTagsEnumValue", "/\\<" . key . "\\>/")
+		elseif tagtype == "d"
+			call <SID>CACEHighlightTarget("CACECTagsMacro", "/\\<" . key . "\\>/")
+		else
+			" f m t v are not suggested
+			"call <SID>LOGE("Not support tag type:" . tagtype . " for tag:" . key)
+		endif
+	endfor
+endfunction
+
+function! <SID>CACEParseCtag()
+	let taglines = []
+	let taglines = readfile("tags")
+	for line in taglines
+		let tagtype = ""
+		let tmp = split(line, '\"')
+		if len(tmp) > 1 && len(tmp[1]) > 1
+			let tagtype = split(tmp[1])[0]
+			" Supported tag type:
+			" c - class
+			" s - struct
+			" g - enum name
+			" e - enum value
+			" d - macro
+			if tagtype == "c" || tagtype == "s" || tagtype == "g"
+				"|| tagtype == "e" || tagtype == "d"
+				let pattern = split(line)[0]
+				if !has_key(g:caceCtagsDict, pattern)
+					let g:caceCtagsDict[pattern] = tagtype
+				endif
+			endif
+		endif
+	endfor
 endfunction
 
 function! <SID>LOG(str)
@@ -324,62 +398,3 @@ function! <SID>LOGS(str)
 	echohl Comment | echo a:str | echohl None
 endfunction
 
-let g:caceCtagsDict				= {}
-
-hi CACECTagsClass		guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
-hi CACECTagsStruct      guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
-hi CACECTagsEnumName	guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
-hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 ctermbg=NONE cterm=NONE
-hi CACECTagsMacro		guifg=#a45ed6 guibg=NONE guisp=NONE gui=NONE ctermfg=134 ctermbg=NONE cterm=NONE
-
-function! <SID>CACEHighlightTarget(group, pattern)
-	exe "syntax match " . a:group . " " . a:pattern
-endfunction
-
-function! <SID>CACEHightlightCtags()
-	let keys = keys(g:caceCtagsDict)
-	for key in keys
-		let tagtype = g:caceCtagsDict[key]
-		if tagtype == "c"
-			call <SID>CACEHighlightTarget("CACECTagsClass", "/\\<" . key . "\\>/")
-		elseif tagtype == "s"
-			call <SID>CACEHighlightTarget("CACECTagsStruct", "/\\<" . key . "\\>/")
-		elseif tagtype == "g"
-			call <SID>CACEHighlightTarget("CACECTagsEnumName", "/\\<" . key . "\\>/")
-		elseif tagtype == "e"
-			call <SID>CACEHighlightTarget("CACECTagsEnumValue", "/\\<" . key . "\\>/")
-		elseif tagtype == "d"
-			call <SID>CACEHighlightTarget("CACECTagsMacro", "/\\<" . key . "\\>/")
-		else
-			" f m t v are not suggested
-			"call <SID>LOGE("Not support tag type:" . tagtype . " for tag:" . key)
-		endif
-	endfor
-endfunction
-
-function! CACEParseCtag()
-	let curcwd = getcwd()
-	let taglines = []
-	exe "cd " . <SID>CACEGetDBPath()
-	let taglines = readfile("tags")
-	for line in taglines
-		let tagtype = ""
-		let tmp = split(line, '\"')
-		if len(tmp) > 1 && len(tmp[1]) > 1
-			let tagtype = split(tmp[1])[0]
-			" Supported tag type:
-			" c - class
-			" s - struct
-			" g - enum name
-			" e - enum value
-			" d - macro
-			if tagtype == "c" || tagtype == "s" || tagtype == "g" || tagtype == "e" || tagtype == "d"
-				let pattern = split(line)[0]
-				if !has_key(g:caceCtagsDict, pattern)
-					let g:caceCtagsDict[pattern] = tagtype
-				endif
-			endif
-		endif
-	endfor
-	exe "cd " . curcwd
-endfunction
