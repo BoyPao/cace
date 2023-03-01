@@ -355,6 +355,9 @@ function! <SID>CACEUpdateDB()
 endfunction
 
 function! <SID>CACEIsHLESuopprted(type)
+	if strlen(a:type) > 1
+		return 0
+	endif
 	let keys = keys(g:caceHLESupportedGroupMap)
 	for key in keys
 		if char2nr(a:type) == char2nr(key)
@@ -393,6 +396,13 @@ function! <SID>CACEUpdateHLE()
 	endfor
 	if len(wlines)
 		call writefile(wlines, "cscope.tags.hle")
+	endif
+	return 0
+endfunction
+
+function! <SID>CACEHLEPatternInvalid(pattern)
+	if strlen(a:pattern) < 2
+		return 1
 	endif
 	return 0
 endfunction
@@ -438,6 +448,10 @@ function! <SID>CACEParseCtag(lines)
 		"else
 			let pattern = split(line)[0]
 		"endif
+
+		if <SID>CACEHLEPatternInvalid(pattern)
+			continue
+		endif
 
 		if !has_key(ctagsdict, tagtype)
 			let ctagsdict[tagtype] = pattern
