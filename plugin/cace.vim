@@ -11,6 +11,7 @@
 " > Autoload cscope & ctags database
 " > Provide command to update cscope & ctags database.
 " > Provide command to search string.
+" > Hightlight enhancemant for user defined symbols.
 
 "==============================================================================
 " Installation:
@@ -26,15 +27,16 @@
 " Commands:
 "==============================================================================
 " > Caceupdate
-"     This command helps user to generate/update cscope and ctags database. It
-"     will search database from current working path upward. If a database is
-"     found, it will update original database. If not, a new database will be
-"     generated at current working path.
+"     This command helps user to generate/update cscope, ctags and hightlight
+"     database. It will search database from current working path upward.
+"     If a database is found, it will update original database. If not, a new
+"     database will be generated at current working path.
 "     If user want to create database for a new project, it is suggested to
 "     use this command at project root.
 "
 " > Caceclean
-"     This command helps to find then delete the cscope and ctags database.
+"     This command helps to find then delete the cscope, ctags and hightlight
+"     database.
 "
 " > Cacegrep
 "     This command executes vimgrep from cscope database directory for target
@@ -86,6 +88,12 @@
 " > g:caceUseDevTree
 "     It supports arm device tree language while executing Caceupdate. The
 "     default value is 1.
+"
+" > g:caceHightlightEnhance
+"     It supports user defined symbol hightlight. The default value is 0.
+"     Please check g:caceHLESupportedGroupMap for supported symbol information.
+"     Note: If you turn on this feature, generating/updating database will take
+"     more time. If you mind the time consumption, it's better to keep it as 0.
 
 autocmd BufEnter /* call <SID>CACELoadDB()
 set tags=tags;
@@ -108,10 +116,6 @@ endif
 
 if !exists(':Cacequickfixtrigger')
 	command! Cacequickfixtrigger call <SID>CACECscopeQuickfixTrigger()
-endif
-
-if !exists(':Cacehletrigger')
-	command! Cacehletrigger call <SID>CACEHLEnhanceTrigger()
 endif
 
 if !exists('g:caceInfoEveryTime')
@@ -139,6 +143,19 @@ let g:caceCppTarget		= ["*.hpp", "*.cpp", "*.cc"]
 let g:caceMKTarget		= ["Makefile", "*.mk"]
 let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
 
+" CACE-HLE(Hightlight Enhancement) supported tag type:
+"	c - class
+"	s - struct
+"	d - macro
+"	g - enum name
+"	e - enum value
+" HLE not supported tag type:
+"	f
+"	m
+"	t
+"	v
+let g:caceHLESupportedGroupMap= { "c": "CACECTagsClass", "s": "CACECTagsStruct", "g": "CACECTagsEnumName", "e": "CACECTagsEnumValue", "d": "CACECTagsMacro"}
+
 hi CACECTagsClass		guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsStruct      guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsEnumName	guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
@@ -156,7 +173,7 @@ endfunction
 
 function! <SID>CACEGrepFunc(target)
 	let curpath = getcwd()
-	exe "cd " . <SID>CACEGetDBPath()
+	exe "cd " . <SID>CACEGetDBPath("cscope.out")
 	call <SID>LOGI(" Searching ...")
 	exe "silent vimgrep /" . a:target . <SID>CACEGenerateCMD("CACECMD_GREPTAR")
 	redraw
@@ -213,11 +230,15 @@ function! <SID>CACELoadDB()
 		exe "cs add " . $CSCOPE_DB
 	endif
 	if g:caceHightlightEnhance == 1
-		call <SID>CACEHightlightCtags()
+		let hledb = findfile("cscope.tags.hle", getcwd() . ";")
+		if (!empty(hledb))
+			exe "source " . hledb
+		endif
 	endif
+	return 0
 endfunction
 
-let g:caceDBName = ['cscope.tags.lst', 'cscope.in.out', 'cscope.out', 'cscope.po.out', 'tags']
+let g:caceDBDict = { "lst": "cscope.tags.lst", "hle": "cscope.tags.hle", "cscope": "cscope.in.out cscope.out cscope.po.out", "ctags": "tags"}
 
 function! <SID>CACEGetTargetLists()
 	let tlist = []
@@ -276,28 +297,37 @@ function! <SID>CACEGenerateCMD(cmdtype)
 	return cmd
 endfunction
 
-function! <SID>CACEGetDBPath()
-	let db = findfile("cscope.out", getcwd() . ";")
+function! <SID>CACEGetDBPath(dbname)
+	let db = findfile(a:dbname, getcwd() . ";")
 	let dbpath = getcwd()
 	if (!empty(db))
-		if (db != "cscope.out")
-			let dbpath = strpart(db, 0, match(db, "/cscope.out$"))
+		if (db != a:dbname)
+			let dbpath = strpart(db, 0, match(db, "/" . a:dbname . "$"))
 		endif
 	endif
 	return dbpath
 endfunction
 
 function! <SID>CACECleanDB()
-	for item in g:caceDBName
-		call delete(item)
+	let keys = keys(g:caceDBDict)
+	for key in keys
+		let dbs = split(g:caceDBDict[key])
+		for db in dbs
+			call delete(db)
+		endfor
 	endfor
+	return 0
 endfunction
 
 function! <SID>CACEUpdateDB()
+	let rt = 0
 	let curcwd = getcwd()
-	exe "cd " . <SID>CACEGetDBPath()
+	exe "cd " . <SID>CACEGetDBPath("cscope.out")
 	call <SID>LOGI(" Updating tags & cscope, please wait ")
-	call <SID>CACECleanDB()
+	let rt = <SID>CACECleanDB()
+	if rt
+		return
+	endif
 	call <SID>LOGI(" Updating tags & cscope, please wait .")
 	call system(<SID>CACEGenerateCMD("CACECMD_DBLIST"))
 	call <SID>LOGI(" Updating tags & cscope, please wait ..")
@@ -305,10 +335,16 @@ function! <SID>CACEUpdateDB()
 	call <SID>LOGI(" Updating tags & cscope, please wait ...")
 	call system('cscope -bkq -i cscope.tags.lst')
 	call <SID>LOGI(" Updating tags & cscope, please wait ....")
-	call <SID>CACEParseCtag()
+	let rt = <SID>CACEUpdateHLE()
+	if rt
+		return
+	endif
 	call <SID>LOGI(" Updating tags & cscope, please wait .....")
 	silent exe "cs reset"
 	call <SID>CACELoadDB()
+	if rt
+		return
+	endif
 	call <SID>LOGI(" Updating tags & cscope, please wait ......")
 	exe "cd " . curcwd
 	call <SID>LOGS(" Updating finished")
@@ -318,66 +354,104 @@ function! <SID>CACEUpdateDB()
 	endif
 endfunction
 
-let g:caceCtagsDict		= {}
-
-function! <SID>CACEHLEnhanceTrigger()
-	if g:caceHightlightEnhance==0
-		let g:caceHightlightEnhance=1
-		call <SID>LOGI("Highlight enhance " . "ON")
-	else
-		let g:caceHightlightEnhance=0
-		call <SID>LOGI("Highlight enhance " . "OFF")
-	endif
-endfunction
-
-function! <SID>CACEHighlightTarget(group, pattern)
-	exe "syntax match " . a:group . " " . a:pattern
-endfunction
-
-function! <SID>CACEHightlightCtags()
-	let keys = keys(g:caceCtagsDict)
+function! <SID>CACEIsHLESuopprted(type)
+	let keys = keys(g:caceHLESupportedGroupMap)
 	for key in keys
-		let tagtype = g:caceCtagsDict[key]
-		if tagtype == "c"
-			call <SID>CACEHighlightTarget("CACECTagsClass", "/\\<" . key . "\\+\\s*(\\@!/")
-		elseif tagtype == "s"
-			call <SID>CACEHighlightTarget("CACECTagsStruct", "/\\<" . key . "\\>/")
-		elseif tagtype == "g"
-			call <SID>CACEHighlightTarget("CACECTagsEnumName", "/\\<" . key . "\\>/")
-		elseif tagtype == "e"
-			call <SID>CACEHighlightTarget("CACECTagsEnumValue", "/\\<" . key . "\\>/")
-		elseif tagtype == "d"
-			call <SID>CACEHighlightTarget("CACECTagsMacro", "/\\<" . key . "\\>/")
-		else
-			" f m t v are not suggested
-			"call <SID>LOGE("Not support tag type:" . tagtype . " for tag:" . key)
+		if char2nr(a:type) == char2nr(key)
+			return 1
 		endif
 	endfor
+	return 0
 endfunction
 
-function! <SID>CACEParseCtag()
-	let taglines = []
-	let taglines = readfile("tags")
-	for line in taglines
+function! <SID>CACEHLEUpdateTrace(index, totle)
+	call <SID>LOGI(" Updating HLEDB, please wait " . string(a:index * 100 / a:totle) . "%")
+endfunction
+
+" A maximal line words number which helps improve ctag parsing speed
+if !exists('g:caceHLEWordsNumPerLine')
+	let g:caceHLEWordsNumPerLine = 100
+endif
+
+function! <SID>CACEUpdateHLE()
+	if g:caceHightlightEnhance == 0
+		return 0
+	endif
+	let tag = findfile(g:caceDBDict["ctags"], ".;")
+	if (empty(tag))
+		call <SID>LOGE(" Update HLE failed. Cannot find: " . g:caceDBDict["ctags"])
+		return 1
+	endif
+	let taglines = readfile(g:caceDBDict["ctags"])
+	let ctagsdict = <SID>CACEParseCtag(taglines)
+	let wlines = []
+	let keys = keys(ctagsdict)
+	for key in keys
+		if <SID>CACEIsHLESuopprted(strcharpart(key, 0, 1))
+			call add(wlines, "syntax keyword " . g:caceHLESupportedGroupMap[strcharpart(key, 0, 1)] . " " . ctagsdict[key])
+		endif
+	endfor
+	if len(wlines)
+		call writefile(wlines, "cscope.tags.hle")
+	endif
+	return 0
+endfunction
+
+function! <SID>CACEParseCtag(lines)
+	let ctagsdict = {}
+	let multitypemap = {}
+	let linenum = len(a:lines)
+	let linecnt = 0
+	for line in a:lines
+		let linecnt = linecnt + 1
 		let tagtype = ""
 		let tmp = split(line, '\"')
-		if len(tmp) > 1 && len(tmp[1]) > 1
-			let tagtype = split(tmp[1])[0]
-			" Supported tag type:
-			" c - class
-			" s - struct
-			" g - enum name
-			" e - enum value
-			" d - macro
-			if tagtype == "c" || tagtype == "s" || tagtype == "g"
-				"|| tagtype == "e" || tagtype == "d"
-				let pattern = split(line)[0]
-				if !has_key(g:caceCtagsDict, pattern)
-					let g:caceCtagsDict[pattern] = tagtype
-				endif
+		if len(tmp) < 2
+			continue
+		elseif len(split(tmp[1])) < 1
+			continue
+		endif
+		let tagtype = split(tmp[1])[0]
+
+		if !<SID>CACEIsHLESuopprted(tagtype)
+			continue
+		endif
+
+		if !has_key(multitypemap, tagtype)
+			let multitypemap[tagtype] = "0:0"
+			let tagtype = tagtype . "0"
+		else
+			let typecnt = split(multitypemap[tagtype], ":")[0]
+			let wordcnt = split(multitypemap[tagtype], ":")[1]
+			if str2nr(wordcnt, 10) < g:caceHLEWordsNumPerLine
+				let wordcnt = wordcnt + 1
+			else
+				let wordcnt = "1"
+				let typecnt = typecnt + 1
 			endif
+			let multitypemap[tagtype] = typecnt . ":" . wordcnt
+			let tagtype = tagtype . typecnt
+		endif
+		"let pattern = ""
+		"if tagtype == "c"
+		"	let pattern = "/\\<" . split(line)[0] . "\\+\\s*(\\@!/"
+		"else
+			let pattern = split(line)[0]
+		"endif
+
+		if !has_key(ctagsdict, tagtype)
+			let ctagsdict[tagtype] = pattern
+		else
+			let dictori = ctagsdict[tagtype]
+
+			let ctagsdict[tagtype] = dictori . " " . pattern
+		endif
+
+		if linecnt % 100 == 0
+			call <SID>CACEHLEUpdateTrace(linecnt, linenum)
 		endif
 	endfor
+	return ctagsdict
 endfunction
 
 function! <SID>LOG(str)
