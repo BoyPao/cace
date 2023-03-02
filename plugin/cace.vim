@@ -373,8 +373,10 @@ endfunction
 
 " A maximal line words number which helps improve ctag parsing speed
 if !exists('g:caceHLEWordsNumPerLine')
-	let g:caceHLEWordsNumPerLine = 100
+	let g:caceHLEWordsNumPerLine = 80
 endif
+
+let g:caceHLEUniquePatternDict = {}
 
 function! <SID>CACEUpdateHLE()
 	if g:caceHightlightEnhance == 0
@@ -386,7 +388,15 @@ function! <SID>CACEUpdateHLE()
 		return 1
 	endif
 	let taglines = readfile(g:caceDBDict["ctags"])
+	if empty(taglines)
+		call <SID>LOGE(" Update HLE failed. Tag is empty: " . g:caceDBDict["ctags"])
+		return 1
+	endif
+
+	let g:caceHLEUniquePatternDict = {}
 	let ctagsdict = <SID>CACEParseCtag(taglines)
+	let g:caceHLEUniquePatternDict = {}
+
 	let wlines = []
 	let keys = keys(ctagsdict)
 	for key in keys
@@ -397,13 +407,28 @@ function! <SID>CACEUpdateHLE()
 	if len(wlines)
 		call writefile(wlines, "cscope.tags.hle")
 	endif
+
+	let keys = keys(g:caceHLESupportedGroupMap)
+	for key in keys
+		exe "syntax clear " . g:caceHLESupportedGroupMap[key]
+	endfor
+
 	return 0
 endfunction
 
 function! <SID>CACEHLEPatternInvalid(pattern)
+	" Single char is not expected to be hightlighted
 	if strlen(a:pattern) < 2
 		return 1
 	endif
+
+	" Only hightlight a pattern onece
+	if has_key(g:caceHLEUniquePatternDict, a:pattern)
+		return 1
+	else
+		let g:caceHLEUniquePatternDict[a:pattern] = 1
+	endif
+
 	return 0
 endfunction
 
@@ -427,6 +452,11 @@ function! <SID>CACEParseCtag(lines)
 			continue
 		endif
 
+		let pattern = split(line)[0]
+		if <SID>CACEHLEPatternInvalid(pattern)
+			continue
+		endif
+
 		if !has_key(multitypemap, tagtype)
 			let multitypemap[tagtype] = "0:0"
 			let tagtype = tagtype . "0"
@@ -441,16 +471,6 @@ function! <SID>CACEParseCtag(lines)
 			endif
 			let multitypemap[tagtype] = typecnt . ":" . wordcnt
 			let tagtype = tagtype . typecnt
-		endif
-		"let pattern = ""
-		"if tagtype == "c"
-		"	let pattern = "/\\<" . split(line)[0] . "\\+\\s*(\\@!/"
-		"else
-			let pattern = split(line)[0]
-		"endif
-
-		if <SID>CACEHLEPatternInvalid(pattern)
-			continue
 		endif
 
 		if !has_key(ctagsdict, tagtype)
