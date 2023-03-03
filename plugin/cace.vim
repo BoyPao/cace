@@ -416,11 +416,25 @@ function! <SID>CACEUpdateHLE()
 	return 0
 endfunction
 
+let g:caceHLEInvalidKeywordDict = {"syn-arguments": "contains oneline fold display extend concealends conceal cchar contained containedin nextgroup transparent skipwhite skipnl skipempty"}
+
 function! <SID>CACEHLEPatternInvalid(pattern)
 	" Single char is not expected to be hightlighted
-	if strlen(a:pattern) < 2
+	" Vim hightlight spec: keyword length < 80. Please check: syn-keyword
+	if strlen(a:pattern) < 2 || strlen(a:pattern) > 80
 		return 1
 	endif
+
+	" keyword cannot be syn-argument. Please check: syn-arguments
+	let keys = keys(g:caceHLEInvalidKeywordDict)
+	for key in keys
+		let invalidkeywordlist = split(g:caceHLEInvalidKeywordDict[key])
+		for word in invalidkeywordlist
+			if a:pattern == word
+				return 1
+			endif
+		endfor
+	endfor
 
 	" Only hightlight a pattern onece
 	if has_key(g:caceHLEUniquePatternDict, a:pattern)
@@ -453,6 +467,9 @@ function! <SID>CACEParseCtag(lines)
 		endif
 
 		let pattern = split(line)[0]
+		if  len(split(pattern, "::")) > 1
+			let pattern = split(pattern, "::")[len(split(pattern, "::")) - 1]
+		endif
 		if <SID>CACEHLEPatternInvalid(pattern)
 			continue
 		endif
@@ -477,7 +494,6 @@ function! <SID>CACEParseCtag(lines)
 			let ctagsdict[tagtype] = pattern
 		else
 			let dictori = ctagsdict[tagtype]
-
 			let ctagsdict[tagtype] = dictori . " " . pattern
 		endif
 
