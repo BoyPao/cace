@@ -73,22 +73,6 @@
 "     will be display every time when Caceupdate executed. The default value
 "     is 0.
 "
-" > g:caceUseC
-"     It supports C language while executing Caceupdate. The default value is
-"     1.
-"
-" > g:caceUseCpp
-"     It supports Cpp language while executing Caceupdate. The default value is
-"     1.
-"
-" > g:caceUseMK
-"     It supports makefile language while executing Caceupdate. The default
-"     value is 1.
-"
-" > g:caceUseDevTree
-"     It supports arm device tree language while executing Caceupdate. The
-"     default value is 1.
-"
 " > g:caceHightlightEnhance
 "     It supports user defined symbol hightlight. The default value is 0.
 "     Please check g:caceHLESupportedGroupMap for supported symbol information.
@@ -122,26 +106,23 @@ if !exists('g:caceInfoEveryTime')
 	let g:caceInfoEveryTime = 0
 endif
 
-if !exists('g:caceUseC')
-	let g:caceUseC=1
-endif
-if !exists('g:caceUseCpp')
-	let g:caceUseCpp=1
-endif
-if !exists('g:caceUseMK')
-	let g:caceUseMK=1
-endif
-if !exists('g:caceUseDevTree')
-	let g:caceUseDevTree=1
-endif
 if !exists('g:caceHightlightEnhance')
-    let g:caceHightlightEnhance=0
+    let g:caceHightlightEnhance = 0
 endif
 
-let g:caceCTarget		= ["*.h", "*.c"]
-let g:caceCppTarget		= ["*.hpp", "*.cpp", "*.cc"]
-let g:caceMKTarget		= ["Makefile", "*.mk"]
-let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
+let g:caceTargetFileTypeMap = {
+			\"c": "h c",
+			\"cpp": "hpp cpp cc",
+			\"mk": "Makefile mk",
+			\"dts": "dtsi dts"
+			\}
+
+let g:caceDBDict = {
+			\"lst": "cscope.tags.lst",
+			\"hle": "cscope.tags.hle",
+			\"cscope": "cscope.in.out cscope.out cscope.po.out",
+			\"ctags": "tags"
+			\}
 
 " CACE-HLE(Hightlight Enhancement) supported tag type:
 "	c - class
@@ -154,7 +135,22 @@ let g:caceDevTreeTarget	= ["*.dts", "*.dtsi"]
 "	m
 "	t
 "	v
-let g:caceHLESupportedGroupMap= { "c": "CACECTagsClass", "s": "CACECTagsStruct", "g": "CACECTagsEnumName", "e": "CACECTagsEnumValue", "d": "CACECTagsMacro"}
+let g:caceHLESupportedGroupMap = {
+			\"c": "CACECTagsClass",
+			\"s": "CACECTagsStruct",
+			\"g": "CACECTagsEnumName",
+			\"e": "CACECTagsEnumValue",
+			\"d": "CACECTagsMacro"
+			\}
+
+" A maximal line words number which helps improve ctag parsing speed
+if !exists('g:caceHLEWordsNumPerLine')
+	let g:caceHLEWordsNumPerLine = 80
+endif
+
+let g:caceHLEInvalidKeywordDict = {
+			\"syn-arguments": "contains oneline fold display extend concealends conceal cchar contained containedin nextgroup transparent skipwhite skipnl skipempty"
+			\}
 
 hi CACECTagsClass		guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsStruct      guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
@@ -219,6 +215,26 @@ function! <SID>CACEcscopeFind(mode, target)
 	endif
 endfunction
 
+function! <SID>CACEUpdateHLEDB()
+	let filetype = split(bufname("%"), '\.')
+	if !len(filetype)
+		return
+	endif
+	let type = filetype[len(filetype) - 1]
+	if !has_key(g:caceTargetFileTypeMap, type)
+		return
+	endif
+	let hledb = findfile("cscope.tags.hle", getcwd() . ";")
+	if (empty(hledb))
+		return
+	endif
+	let keys = keys(g:caceHLESupportedGroupMap)
+	for key in keys
+		exe "syntax clear " . g:caceHLESupportedGroupMap[key]
+	endfor
+	exe "source " . hledb
+endfunction
+
 function! <SID>CACELoadDB()
 	let db = findfile("cscope.out", ".;")
 	if (!empty(db))
@@ -230,30 +246,17 @@ function! <SID>CACELoadDB()
 		exe "cs add " . $CSCOPE_DB
 	endif
 	if g:caceHightlightEnhance == 1
-		let hledb = findfile("cscope.tags.hle", getcwd() . ";")
-		if (!empty(hledb))
-			exe "source " . hledb
-		endif
+		call <SID>CACEUpdateHLEDB()
 	endif
 	return 0
 endfunction
 
-let g:caceDBDict = { "lst": "cscope.tags.lst", "hle": "cscope.tags.hle", "cscope": "cscope.in.out cscope.out cscope.po.out", "ctags": "tags"}
-
 function! <SID>CACEGetTargetLists()
 	let tlist = []
-	if g:caceUseC == 1
-		call add(tlist, g:caceCTarget	   )
-	endif
-	if g:caceUseCpp == 1
-		call add(tlist, g:caceCppTarget	   )
-	endif
-	if g:caceUseMK == 1
-		call add(tlist, g:caceMKTarget	   )
-	endif
-	if g:caceUseDevTree == 1
-		call add(tlist, g:caceDevTreeTarget)
-	endif
+	let keys = keys(g:caceTargetFileTypeMap)
+	for key in keys
+		call add(tlist, split(g:caceTargetFileTypeMap[key]))
+	endfor
 	return tlist
 endfunction
 
@@ -263,33 +266,32 @@ function! <SID>CACEGenerateCMD(cmdtype)
 	let cmd = ""
 	if a:cmdtype == "CACECMD_DBLIST"
 		call add(cmdlist, "find -name")
-		let type = 0
-		while type < len(tlists)
-			let index = 0
-			while index < len(tlists[type])
-				let item = tlists[type][index]
-				let isfirst = type + index
-				if isfirst > 0
+		let isfirst = 1
+		for tlist in tlists
+			for item in tlist
+				if !isfirst
 					call add(cmdlist, "-o -name")
 				endif
-				call add(cmdlist,'"' . item . '"')
-				let index = index + 1
-			endwhile
-			let type = type + 1
-		endwhile
+				if item == "Makefile"
+					call add(cmdlist,'"' . item . '"')
+				else
+					call add(cmdlist,'"*.' . item . '"')
+				endif
+				let isfirst = 0
+			endfor
+		endfor
 		call add(cmdlist, "> cscope.tags.lst")
 	elseif a:cmdtype == "CACECMD_GREPTAR"
 		call add(cmdlist, "/j")
-		let type = 0
-		while type < len(tlists)
-			let index = 0
-			while index < len(tlists[type])
-				let item = tlists[type][index]
-				call add(cmdlist,'**/' . item)
-				let index = index + 1
-			endwhile
-			let type = type + 1
-		endwhile
+		for tlist in tlists
+			for item in tlist
+				if item == "Makefile"
+					call add(cmdlist,'**/' . item)
+				else
+					call add(cmdlist,'**/*.' . item)
+				endif
+			endfor
+		endfor
 	else
 		call <SID>LOGE("Unknown CMD tyep:" . a:cmdtype)
 	endif
@@ -371,11 +373,6 @@ function! <SID>CACEHLEUpdateTrace(index, totle)
 	call <SID>LOGI(" Updating HLEDB, please wait " . string(a:index * 100 / a:totle) . "%")
 endfunction
 
-" A maximal line words number which helps improve ctag parsing speed
-if !exists('g:caceHLEWordsNumPerLine')
-	let g:caceHLEWordsNumPerLine = 80
-endif
-
 let g:caceHLEUniquePatternDict = {}
 
 function! <SID>CACEUpdateHLE()
@@ -415,8 +412,6 @@ function! <SID>CACEUpdateHLE()
 
 	return 0
 endfunction
-
-let g:caceHLEInvalidKeywordDict = {"syn-arguments": "contains oneline fold display extend concealends conceal cchar contained containedin nextgroup transparent skipwhite skipnl skipempty"}
 
 function! <SID>CACEHLEPatternInvalid(pattern)
 	" Single char is not expected to be hightlighted
