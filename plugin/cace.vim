@@ -111,10 +111,10 @@ if !exists('g:caceHightlightEnhance')
 endif
 
 let g:caceTargetFileTypeMap = {
-			\"c": "h c",
-			\"cpp": "hpp cpp cc",
-			\"mk": "Makefile mk",
-			\"dts": "dtsi dts"
+			\"c": ".h .c",
+			\"cpp": ".hpp .cpp .cc",
+			\"mk": "Makefile Kconfig .mk",
+			\"dts": ".dtsi .dts"
 			\}
 
 let g:caceDBDict = {
@@ -208,7 +208,7 @@ function! <SID>CACEcscopeFind(mode, target)
 	if modevalid == 0
 		call <SID>LOGE("Invalid mode: " . a:mode)
 	else
-		exe "cs find " . a:mode a:target
+		exe "cs find " . a:mode . " " . a:target
 		if &cscopequickfix !=""
 			exe "cw"
 		endif
@@ -216,12 +216,23 @@ function! <SID>CACEcscopeFind(mode, target)
 endfunction
 
 function! <SID>CACEUpdateHLEDB()
-	let filetype = split(bufname("%"), '\.')
-	if !len(filetype)
-		return
-	endif
-	let type = filetype[len(filetype) - 1]
-	if !has_key(g:caceTargetFileTypeMap, type)
+	let filetype = expand('%:e')
+	let tdict = <SID>CACEGetTargetDict()
+	let keys = keys(tdict)
+	let typevalid = 0
+	for key in keys
+		let tlist = split(tdict[key])
+		for item in tlist
+			if filetype == item
+				let typevalid = 1
+				break
+			endif
+		endfor
+		if typevalid
+			break
+		endif
+	endfor
+	if !typevalid
 		return
 	endif
 	let hledb = findfile("cscope.tags.hle", getcwd() . ";")
@@ -251,30 +262,43 @@ function! <SID>CACELoadDB()
 	return 0
 endfunction
 
-function! <SID>CACEGetTargetLists()
-	let tlist = []
+function! <SID>CACEGetTargetDict()
+	let tdict = {}
+	let namelist = []
+	let typelist = []
 	let keys = keys(g:caceTargetFileTypeMap)
 	for key in keys
-		call add(tlist, split(g:caceTargetFileTypeMap[key]))
+		let tlist = split(g:caceTargetFileTypeMap[key])
+		for target in tlist
+			if strpart(target, 0, 1) == "."
+				call add(typelist, strpart(target, 1))
+			else
+				call add(namelist, target)
+			endif
+		endfor
 	endfor
-	return tlist
+	let tdict['name'] = join(namelist)
+	let tdict['type'] = join(typelist)
+	return tdict
 endfunction
 
 function! <SID>CACEGenerateCMD(cmdtype)
-	let tlists = <SID>CACEGetTargetLists()
+	let tdict = <SID>CACEGetTargetDict()
+	let keys = keys(tdict)
 	let cmdlist = []
 	let cmd = ""
 	if a:cmdtype == "CACECMD_DBLIST"
 		call add(cmdlist, "find -name")
 		let isfirst = 1
-		for tlist in tlists
+		for key in keys
+			let tlist = split(tdict[key])
 			for item in tlist
 				if !isfirst
 					call add(cmdlist, "-o -name")
 				endif
-				if item == "Makefile"
+				if key == "name"
 					call add(cmdlist,'"' . item . '"')
-				else
+				elseif key == "type"
 					call add(cmdlist,'"*.' . item . '"')
 				endif
 				let isfirst = 0
@@ -283,11 +307,12 @@ function! <SID>CACEGenerateCMD(cmdtype)
 		call add(cmdlist, "> cscope.tags.lst")
 	elseif a:cmdtype == "CACECMD_GREPTAR"
 		call add(cmdlist, "/j")
-		for tlist in tlists
+		for key in keys
+			let tlist = split(tdict[key])
 			for item in tlist
-				if item == "Makefile"
+				if key == "name"
 					call add(cmdlist,'**/' . item)
-				else
+				elseif key == "type"
 					call add(cmdlist,'**/*.' . item)
 				endif
 			endfor
