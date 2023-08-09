@@ -11,7 +11,7 @@
 " > Autoload cscope & ctags database
 " > Provide command to update cscope & ctags database.
 " > Provide command to search string.
-" > Hightlight enhancemant for user defined symbols.
+" > Highlight enhancemant for user defined symbols.
 
 "==============================================================================
 " Installation:
@@ -27,7 +27,7 @@
 " Commands:
 "==============================================================================
 " > Caceupdate
-"     This command helps user to generate/update cscope, ctags and hightlight
+"     This command helps user to generate/update cscope, ctags and highlight
 "     database. It will search database from current working path upward.
 "     If a database is found, it will update original database. If not, a new
 "     database will be generated at current working path.
@@ -35,7 +35,7 @@
 "     use this command at project root.
 "
 " > Caceclean
-"     This command helps to find then delete the cscope, ctags and hightlight
+"     This command helps to find then delete the cscope, ctags and highlight
 "     database.
 "
 " > Cacegrep
@@ -73,8 +73,8 @@
 "     will be display every time when Caceupdate executed. The default value
 "     is 0.
 "
-" > g:caceHightlightEnhance
-"     It supports user defined symbol hightlight. The default value is 0.
+" > g:caceHighlightEnhance
+"     It supports user defined symbol highlight. The default value is 0.
 "     Please check g:caceHLESupportedGroupMap for supported symbol information.
 "     Note: If you turn on this feature, generating/updating database will take
 "     more time. If you mind the time consumption, it's better to keep it as 0.
@@ -106,8 +106,8 @@ if !exists('g:caceInfoEveryTime')
 	let g:caceInfoEveryTime = 0
 endif
 
-if !exists('g:caceHightlightEnhance')
-    let g:caceHightlightEnhance = 0
+if !exists('g:caceHighlightEnhance')
+    let g:caceHighlightEnhance = 0
 endif
 
 let g:caceTargetFileTypeMap = {
@@ -124,7 +124,7 @@ let g:caceDBDict = {
 			\"ctags": "tags"
 			\}
 
-" CACE-HLE(Hightlight Enhancement) supported tag type:
+" CACE-HLE(Highlight Enhancement) supported tag type:
 "	c - class
 "	s - struct
 "	d - macro
@@ -256,7 +256,7 @@ function! <SID>CACELoadDB()
 	elseif $CSCOPE_DB != ""
 		exe "cs add " . $CSCOPE_DB
 	endif
-	if g:caceHightlightEnhance == 1
+	if g:caceHighlightEnhance == 1
 		call <SID>CACEUpdateHLEDB()
 	endif
 	return 0
@@ -401,7 +401,7 @@ endfunction
 let g:caceHLEUniquePatternDict = {}
 
 function! <SID>CACEUpdateHLE()
-	if g:caceHightlightEnhance == 0
+	if g:caceHighlightEnhance == 0
 		return 0
 	endif
 	let tag = findfile(g:caceDBDict["ctags"], ".;")
@@ -439,8 +439,8 @@ function! <SID>CACEUpdateHLE()
 endfunction
 
 function! <SID>CACEHLEPatternInvalid(pattern)
-	" Single char is not expected to be hightlighted
-	" Vim hightlight spec: keyword length < 80. Please check: syn-keyword
+	" Single char is not expected to be highlighted
+	" Vim highlight spec: keyword length < 80. Please check: syn-keyword
 	if strlen(a:pattern) < 2 || strlen(a:pattern) > 80
 		return 1
 	endif
@@ -456,7 +456,7 @@ function! <SID>CACEHLEPatternInvalid(pattern)
 		endfor
 	endfor
 
-	" Only hightlight a pattern onece
+	" Only highlight a pattern onece
 	if has_key(g:caceHLEUniquePatternDict, a:pattern)
 		return 1
 	else
