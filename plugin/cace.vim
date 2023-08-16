@@ -12,6 +12,7 @@
 " > Provide command to update cscope & ctags database.
 " > Provide command to search string.
 " > Highlight enhancemant for user defined symbols.
+" > Provide background process by async methmod.
 
 "==============================================================================
 " Installation:
@@ -33,6 +34,9 @@
 "     database will be generated at current working path.
 "     If user want to create database for a new project, it is suggested to
 "     use this command at project root.
+"
+" > Caceupdatehle
+"     This command helps updating only hle database.
 "
 " > Caceclean
 "     This command helps to find then delete the cscope, ctags and highlight
@@ -68,26 +72,28 @@
 "==============================================================================
 " Configuration:
 "==============================================================================
-" > g:caceInfoEveryTime
-"     If g:caceInfoEveryTime equals to 1, cscope database loading information
-"     will be display every time when Caceupdate executed. The default value
-"     is 0.
-"
 " > g:caceHighlightEnhance
 "     It supports user defined symbol highlight. The default value is 0.
-"     Please check g:caceHLESupportedGroupMap for supported symbol information.
+"     Please check s:caceHLESupportedGroupMap for supported symbol information.
 "     Note: If you turn on this feature, generating/updating database will take
 "     more time. If you mind the time consumption, it's better to keep it as 0.
 
 autocmd BufEnter /* call <SID>CACELoadDB()
+autocmd VimLeavePre /* call <SID>CACEFlushJobs()
+autocmd CursorMoved /* call <SID>CACECursorMoved()
+
 set tags=tags;
 
 if !exists(':Caceupdate')
 	command! Caceupdate call <SID>CACEUpdateDB()
 endif
 
+if !exists(':Caceupdatehle')
+   command! Caceupdatehle call <SID>CACEUpdateHLE()
+endif
+
 if !exists(':Caceclean')
-	command! Caceclean call <SID>CACECleanDB()
+	command! Caceclean call <SID>CACECleanDB('all')
 endif
 
 if !exists(':Cacegrep')
@@ -102,27 +108,58 @@ if !exists(':Cacequickfixtrigger')
 	command! Cacequickfixtrigger call <SID>CACECscopeQuickfixTrigger()
 endif
 
-if !exists('g:caceInfoEveryTime')
-	let g:caceInfoEveryTime = 0
-endif
-
 if !exists('g:caceHighlightEnhance')
-    let g:caceHighlightEnhance = 0
+   let g:caceHighlightEnhance = 0
 endif
 
-let g:caceTargetFileTypeMap = {
-			\"c": ".h .c",
-			\"cpp": ".hpp .cpp .cc",
-			\"mk": "Makefile Kconfig .mk",
-			\"dts": ".dtsi .dts"
-			\}
+if version >= 800
+   let s:caceAsyncProcess = 1
+else
+   let s:caceAsyncProcess = 0
+endif
 
-let g:caceDBDict = {
-			\"lst": "cscope.tags.lst",
-			\"hle": "cscope.tags.hle",
-			\"cscope": "cscope.in.out cscope.out cscope.po.out",
-			\"ctags": "tags"
-			\}
+let s:caceCWD = ''
+
+let s:caceJobsDict = {}
+
+let s:caceFinding = 0
+
+let s:caceMsgSymbolDict = {
+           \ 'start' : 'CACE-S',
+           \ 'end' : 'CACE-E'
+           \ }
+
+let s:caceJobCmdId = {
+           \ 'lst' : 'CACECMD_LST',
+           \ 'cscope' : 'CACECMD_CSCOPE',
+           \ 'ctags' : 'CACECMD_CTAGS',
+           \ 'hle' : 'CACECMD_HLE'
+           \ }
+
+let s:caceTargetFileTypeMap = {
+			\ 'c' : '.h .c',
+			\ 'cpp' : '.hpp .cpp .cc',
+			\ 'mk' : 'Makefile Kconfig .mk',
+			\ 'dts' : '.dtsi .dts'
+			\ }
+
+let s:caceDBDict = {
+			\ 'lst' : 'cscope.tags.lst',
+			\ 'cscope' : 'cscope.in.out cscope.out cscope.po.out',
+			\ 'ctags' : 'tags',
+			\ 'hle' : 'cscope.tags.hle'
+			\ }
+
+let s:caceCscopeFindModeDict = {
+           \ 'g' : 1,
+           \ 'c' : 1,
+           \ 't' : 1,
+           \ 's' : 1,
+           \ 'd' : 1,
+           \ 'e' : 1,
+           \ 'f' : 1,
+           \ 'i' : 1
+           \}
 
 " CACE-HLE(Highlight Enhancement) supported tag type:
 "	c - class
@@ -135,28 +172,253 @@ let g:caceDBDict = {
 "	m
 "	t
 "	v
-let g:caceHLESupportedGroupMap = {
-			\"c": "CACECTagsClass",
-			\"s": "CACECTagsStruct",
-			\"g": "CACECTagsEnumName",
-			\"e": "CACECTagsEnumValue",
-			\"d": "CACECTagsMacro"
-			\}
+let s:caceHLESupportedGroupMap = {
+			\ 'c' : 'CACECTagsClass',
+			\ 's' : 'CACECTagsStruct',
+			\ 'g' : 'CACECTagsEnumName',
+			\ 'e' : 'CACECTagsEnumValue',
+			\ 'd' : 'CACECTagsMacro'
+			\ }
+
+let s:caceHLEInvalidKeywordDict = {
+			\ 'syn-arguments' : 'contains oneline fold display extend concealends conceal cchar contained containedin nextgroup transparent skipwhite skipnl skipempty'
+			\ }
 
 " A maximal line words number which helps improve ctag parsing speed
-if !exists('g:caceHLEWordsNumPerLine')
-	let g:caceHLEWordsNumPerLine = 80
-endif
+let s:caceHLEWordsNumPerLine = 80
 
-let g:caceHLEInvalidKeywordDict = {
-			\"syn-arguments": "contains oneline fold display extend concealends conceal cchar contained containedin nextgroup transparent skipwhite skipnl skipempty"
-			\}
+let s:caceHLEUniquePatternDict = {}
 
 hi CACECTagsClass		guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsStruct      guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsEnumName	guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 ctermbg=NONE cterm=NONE
 hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 ctermbg=NONE cterm=NONE
 hi CACECTagsMacro		guifg=#ad77d4 guibg=NONE guisp=NONE gui=NONE ctermfg=140 ctermbg=NONE cterm=NONE
+
+function! <SID>CACECursorMoved()
+   let s:caceFinding = 0
+endfunction
+
+function! <SID>CACEGenerateCMD(cmdid, cmdtype)
+	let tdict = <SID>CACEGetTargetDict()
+	let keys = keys(tdict)
+	let cmdlist = []
+	let cmd = ""
+	if a:cmdid == "CACECMD_GREP"
+		call add(cmdlist, "/j")
+		for key in keys
+			let tlist = split(tdict[key])
+			for item in tlist
+				if key == "name"
+					call add(cmdlist,'**/' . item)
+				elseif key == "type"
+					call add(cmdlist,'**/*.' . item)
+				endif
+			endfor
+		endfor
+	elseif a:cmdid == "CACECMD_LST"
+		call add(cmdlist, "find -name")
+		let isfirst = 1
+		for key in keys
+			let tlist = split(tdict[key])
+			for item in tlist
+				if !isfirst
+					call add(cmdlist, "-o -name")
+				endif
+				if key == "name"
+					call add(cmdlist,'"' . item . '"')
+				elseif key == "type"
+					call add(cmdlist,'"*.' . item . '"')
+				endif
+				let isfirst = 0
+			endfor
+		endfor
+		call add(cmdlist, "> cscope.tags.lst")
+	elseif a:cmdid == "CACECMD_CSCOPE"
+		call add(cmdlist, 'cscope -bkq -i cscope.tags.lst')
+	elseif a:cmdid == "CACECMD_CTAGS"
+		call add(cmdlist, 'ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
+	elseif a:cmdid == "CACECMD_HLE"
+		call add(cmdlist, 'vim +Caceupdatehle +q')
+	else
+		call <SID>LOGE("Unknown CMD tyep:" . a:cmdid)
+	endif
+	let cmd = join(cmdlist)
+	if a:cmdtype == "str"
+		return cmd
+	elseif a:cmdtype == "lst"
+		let lst = []
+		if s:caceAsyncProcess == 1
+			call add(lst, '/bin/sh')
+			call add(lst, '-c')
+		endif
+		call add(lst, cmd)
+		return lst
+	endif
+endfunction
+
+function! <SID>CACEUpdateDB()
+   if s:caceAsyncProcess == 1
+       let s:caceCWD = getcwd()
+       exe 'cd ' . <SID>CACEGetDBPath('cscope.out')
+       call <SID>CACECleanDB('lst')
+       call <SID>CACEStartJob('lst')
+   else
+       call <SID>CACEUpdateDBSync()
+   endif
+endfunction
+
+function! <SID>CACEParseMsg(msg)
+   let eidx = match(a:msg, 'Error')
+   if  eidx >= 0
+       " TODO: how to handle error ?
+       "call <SID>LOGE(strpart(a:msg, eidx, 80))
+       return ''
+   endif
+   let sidx = match(a:msg, s:caceMsgSymbolDict['start'])
+   if sidx < 0
+       return ''
+   endif
+   let sidx = sidx + len(s:caceMsgSymbolDict['start'])
+   let eidx = match(a:msg, s:caceMsgSymbolDict['end'])
+   if eidx < sidx
+       return ''
+   endif
+   return strpart(a:msg, sidx, eidx - sidx )
+endfunction
+
+function! <SID>CACERemoveJob(jobname)
+   if !has_key(s:caceJobsDict, a:jobname)
+       return
+   endif
+   call remove(s:caceJobsDict, a:jobname)
+endfunction
+
+function! <SID>CACEFlushJobs()
+   let keys = keys(s:caceJobsDict)
+   for key in keys
+       let job = s:caceJobsDict[key]
+       call job_stop(job)
+       if job_status(job) == 'run'
+           call <SID>LOGE('Failed to stop job ' . key)
+       endif
+       call <SID>CACERemoveJob(key)
+   endfor
+endfunction
+
+function! <SID>CACEProgressTrace(step)
+   call <SID>LOGI(' Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
+endfunction
+
+function! <SID>CACEJobResponseCb(channel, msg)
+   let str = <SID>CACEParseMsg(a:msg)
+   if str != ''
+       if s:caceFinding == 0
+           call <SID>LOGI(str)
+       endif
+   endif
+endfunction
+
+function! <SID>CACELstJobExitCb(job, status)
+   let info = job_info(a:job)
+   if info['status'] == 'dead'
+       call <SID>CACERemoveJob('lst')
+       call <SID>CACEProgressTrace(1)
+       call <SID>CACECleanDB('cscope')
+       call <SID>CACEStartJob('cscope')
+   else
+       call <SID>LOGE('Job lst not finish on exit')
+   endif
+endfunction
+
+function! <SID>CACECscopeJobExitCb(job, status)
+   let info = job_info(a:job)
+   if info['status'] == 'dead'
+       call <SID>CACERemoveJob('cscope')
+       call <SID>CACELoadCscopeDB()
+       call <SID>CACEProgressTrace(2)
+       call <SID>CACECleanDB('ctags')
+       call <SID>CACEStartJob('ctags')
+   else
+       call <SID>LOGE('Job cscope not finish on exit')
+   endif
+endfunction
+
+function! <SID>CACECtagsJobExitCb(job, status)
+   let info = job_info(a:job)
+   if info['status'] == 'dead'
+       call <SID>CACERemoveJob('ctags')
+       call <SID>CACEProgressTrace(3)
+       if g:caceHighlightEnhance == 1
+           call <SID>CACEStartJob('hle')
+       else
+           call <SID>CACEProgressTrace(4)
+           call <SID>LOGS('CACE update success')
+       endif
+   else
+       call <SID>LOGE('Job ctags not finish on exit')
+   endif
+endfunction
+
+function! <SID>CACEHLEJobExitCb(job, status)
+   let info = job_info(a:job)
+   if info['status'] == 'dead'
+       call <SID>CACERemoveJob('hle')
+       call <SID>CACELoadHLEDB()
+       call <SID>CACEProgressTrace(4)
+       call <SID>LOGS('CACE update success')
+       if s:caceCWD != ''
+           exe 'cd ' . s:caceCWD
+       endif
+   else
+       call <SID>LOGE('Job hle not finish on exit')
+   endif
+endfunction
+
+let s:caceJobsOptions = {
+           \ 'lst' : {
+               \ 'callback' : function('<SID>CACEJobResponseCb'),
+               \ 'exit_cb' : function('<SID>CACELstJobExitCb'),
+               \ 'out_io' : 'pipe',
+               \ 'err_io' : 'out',
+               \ 'timeout' : 2000,
+               \ 'out_timeout' : 10000
+               \ },
+           \ 'cscope' : {
+               \ 'callback' : function('<SID>CACEJobResponseCb'),
+               \ 'exit_cb' : function('<SID>CACECscopeJobExitCb'),
+               \ 'out_io' : 'pipe',
+               \ 'err_io' : 'out',
+               \ 'timeout' : 2000,
+               \ 'out_timeout' : 10000
+               \ },
+           \ 'ctags' : {
+               \ 'callback' : function('<SID>CACEJobResponseCb'),
+               \ 'exit_cb' : function('<SID>CACECtagsJobExitCb'),
+               \ 'out_io' : 'pipe',
+               \ 'err_io' : 'out',
+               \ 'timeout' : 2000,
+               \ 'out_timeout' : 10000
+               \ },
+           \ 'hle' : {
+               \ 'callback' : function('<SID>CACEJobResponseCb'),
+               \ 'exit_cb' : function('<SID>CACEHLEJobExitCb'),
+               \ 'out_io' : 'pipe',
+               \ 'err_io' : 'out',
+               \ 'timeout' : 2000,
+               \ 'out_timeout' : 10000
+               \ }
+           \ }
+
+function! <SID>CACEStartJob(jobname)
+   let cmd = <SID>CACEGenerateCMD(s:caceJobCmdId[a:jobname], 'lst')
+   let options = s:caceJobsOptions[a:jobname]
+   let s:caceJobsDict[a:jobname] = job_start(cmd, options)
+   let jobstatus = job_status(s:caceJobsDict[a:jobname])
+   if jobstatus != 'run'
+       call <SID>LOGE('faild to start async job for DB update')
+   endif
+endfunction
 
 function! <SID>CACECscopeQuickfixTrigger()
 	if &cscopequickfix==""
@@ -168,54 +430,50 @@ function! <SID>CACECscopeQuickfixTrigger()
 endfunction
 
 function! <SID>CACEGrepFunc(target)
-	let curpath = getcwd()
+	let s:caceCWD = getcwd()
 	exe "cd " . <SID>CACEGetDBPath("cscope.out")
 	call <SID>LOGI(" Searching ...")
-	exe "silent vimgrep /" . a:target . <SID>CACEGenerateCMD("CACECMD_GREPTAR")
+	exe "silent vimgrep /" . a:target . <SID>CACEGenerateCMD('CACECMD_GREP', 'str')
 	redraw
 	call <SID>LOGI(" ")
-	exe "cd " . curpath
+	exe "cd " . s:caceCWD
 	let @/ = a:target
 	exe "copen"
 endfunction
 
 function! <SID>CACEcscopeFind(mode, target)
-	let modevalid = 0
-	if a:mode == 'g'
-		let modevalid = 1
-	endif
-	if a:mode == 'c'
-		let modevalid = 1
-	endif
-	if a:mode == 't'
-		let modevalid = 1
-	endif
-	if a:mode == 's'
-		let modevalid = 1
-	endif
-	if a:mode == 'd'
-		let modevalid = 1
-	endif
-	if a:mode == 'e'
-		let modevalid = 1
-	endif
-	if a:mode == 'f'
-		let modevalid = 1
-	endif
-	if a:mode == 'i'
-		let modevalid = 1
-	endif
-	if modevalid == 0
+	if !has_key(s:caceCscopeFindModeDict, a:mode) || s:caceCscopeFindModeDict[a:mode] != 1
 		call <SID>LOGE("Invalid mode: " . a:mode)
-	else
-		exe "cs find " . a:mode . " " . a:target
-		if &cscopequickfix !=""
-			exe "cw"
-		endif
+		return
+	endif
+	let s:caceFinding = 1
+	exe "cs find " . a:mode . " " . a:target
+	if &cscopequickfix !=""
+		exe "cw"
 	endif
 endfunction
 
-function! <SID>CACEUpdateHLEDB()
+function! <SID>CACEGetTargetDict()
+	let tdict = {}
+	let namelist = []
+	let typelist = []
+	let keys = keys(s:caceTargetFileTypeMap)
+	for key in keys
+		let tlist = split(s:caceTargetFileTypeMap[key])
+		for target in tlist
+			if strpart(target, 0, 1) == "."
+				call add(typelist, strpart(target, 1))
+			else
+				call add(namelist, target)
+			endif
+		endfor
+	endfor
+	let tdict['name'] = join(namelist)
+	let tdict['type'] = join(typelist)
+	return tdict
+endfunction
+
+function! <SID>CACELoadHLEDB()
 	let filetype = expand('%:e')
 	let tdict = <SID>CACEGetTargetDict()
 	let keys = keys(tdict)
@@ -235,18 +493,19 @@ function! <SID>CACEUpdateHLEDB()
 	if !typevalid
 		return
 	endif
-	let hledb = findfile("cscope.tags.hle", getcwd() . ";")
+	let hledb = findfile(s:caceDBDict['hle'], getcwd() . ";")
 	if (empty(hledb))
 		return
 	endif
-	let keys = keys(g:caceHLESupportedGroupMap)
+	let keys = keys(s:caceHLESupportedGroupMap)
 	for key in keys
-		exe "syntax clear " . g:caceHLESupportedGroupMap[key]
+		exe "syntax clear " . s:caceHLESupportedGroupMap[key]
 	endfor
 	exe "source " . hledb
 endfunction
 
-function! <SID>CACELoadDB()
+function! <SID>CACELoadCscopeDB()
+	silent exe "cs kill -1"
 	let db = findfile("cscope.out", ".;")
 	if (!empty(db))
 		let path = strpart(db, 0, match(db, "/cscope.out$"))
@@ -256,72 +515,18 @@ function! <SID>CACELoadDB()
 	elseif $CSCOPE_DB != ""
 		exe "cs add " . $CSCOPE_DB
 	endif
+endfunction
+
+function! <SID>CACELoadDB()
+	call <SID>CACELoadCscopeDB()
 	if g:caceHighlightEnhance == 1
-		call <SID>CACEUpdateHLEDB()
+		call <SID>CACELoadHLEDB()
 	endif
 	return 0
 endfunction
 
-function! <SID>CACEGetTargetDict()
-	let tdict = {}
-	let namelist = []
-	let typelist = []
-	let keys = keys(g:caceTargetFileTypeMap)
-	for key in keys
-		let tlist = split(g:caceTargetFileTypeMap[key])
-		for target in tlist
-			if strpart(target, 0, 1) == "."
-				call add(typelist, strpart(target, 1))
-			else
-				call add(namelist, target)
-			endif
-		endfor
-	endfor
-	let tdict['name'] = join(namelist)
-	let tdict['type'] = join(typelist)
-	return tdict
-endfunction
-
-function! <SID>CACEGenerateCMD(cmdtype)
-	let tdict = <SID>CACEGetTargetDict()
-	let keys = keys(tdict)
-	let cmdlist = []
-	let cmd = ""
-	if a:cmdtype == "CACECMD_DBLIST"
-		call add(cmdlist, "find -name")
-		let isfirst = 1
-		for key in keys
-			let tlist = split(tdict[key])
-			for item in tlist
-				if !isfirst
-					call add(cmdlist, "-o -name")
-				endif
-				if key == "name"
-					call add(cmdlist,'"' . item . '"')
-				elseif key == "type"
-					call add(cmdlist,'"*.' . item . '"')
-				endif
-				let isfirst = 0
-			endfor
-		endfor
-		call add(cmdlist, "> cscope.tags.lst")
-	elseif a:cmdtype == "CACECMD_GREPTAR"
-		call add(cmdlist, "/j")
-		for key in keys
-			let tlist = split(tdict[key])
-			for item in tlist
-				if key == "name"
-					call add(cmdlist,'**/' . item)
-				elseif key == "type"
-					call add(cmdlist,'**/*.' . item)
-				endif
-			endfor
-		endfor
-	else
-		call <SID>LOGE("Unknown CMD tyep:" . a:cmdtype)
-	endif
-	let cmd = join(cmdlist)
-	return cmd
+function! <SID>CACEGenerateMsg(str)
+	return s:caceMsgSymbolDict["start"] . a:str . s:caceMsgSymbolDict["end"]
 endfunction
 
 function! <SID>CACEGetDBPath(dbname)
@@ -335,57 +540,54 @@ function! <SID>CACEGetDBPath(dbname)
 	return dbpath
 endfunction
 
-function! <SID>CACECleanDB()
-	let keys = keys(g:caceDBDict)
+function! <SID>CACECleanDB(target)
+	let keys = keys(s:caceDBDict)
 	for key in keys
-		let dbs = split(g:caceDBDict[key])
-		for db in dbs
-			call delete(db)
-		endfor
+		if a:target == 'all' || a:target == key
+			let dbs = split(s:caceDBDict[key])
+			for db in dbs
+				call delete(db)
+			endfor
+			if a:target == key
+				break
+			endif
+		endif
 	endfor
-	return 0
 endfunction
 
-function! <SID>CACEUpdateDB()
+function! <SID>CACEUpdateDBSync()
 	let rt = 0
-	let curcwd = getcwd()
+	let s:caceCWD = getcwd()
 	exe "cd " . <SID>CACEGetDBPath("cscope.out")
-	call <SID>LOGI(" Updating tags & cscope, please wait ")
-	let rt = <SID>CACECleanDB()
-	if rt
-		return
-	endif
-	call <SID>LOGI(" Updating tags & cscope, please wait .")
-	call system(<SID>CACEGenerateCMD("CACECMD_DBLIST"))
-	call <SID>LOGI(" Updating tags & cscope, please wait ..")
-	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
-	call <SID>LOGI(" Updating tags & cscope, please wait ...")
+	call <SID>CACECleanDB('lst')
+	call system(<SID>CACEGenerateCMD('CACECMD_LST', 'str'))
+	call <SID>CACEProgressTrace(1)
+	call <SID>CACECleanDB('cscope')
 	call system('cscope -bkq -i cscope.tags.lst')
-	call <SID>LOGI(" Updating tags & cscope, please wait ....")
+	call <SID>CACELoadCscopeDB()
+	call <SID>CACEProgressTrace(2)
+	call <SID>CACECleanDB('ctags')
+	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
+	call <SID>CACEProgressTrace(3)
 	let rt = <SID>CACEUpdateHLE()
 	if rt
 		return
 	endif
-	call <SID>LOGI(" Updating tags & cscope, please wait .....")
-	silent exe "cs reset"
-	call <SID>CACELoadDB()
+	call <SID>CACELoadHLEDB()
+	call <SID>CACEProgressTrace(4)
 	if rt
 		return
 	endif
-	call <SID>LOGI(" Updating tags & cscope, please wait ......")
-	exe "cd " . curcwd
-	call <SID>LOGS(" Updating finished")
-	if g:caceInfoEveryTime == 1
-		call <SID>LOG(" Working path:" . getcwd() . "\n DB info:\n")
-		exe "cs show"
-	endif
+	exe "cd " . s:caceCWD
+	call <SID>LOGS("CACE update success\n")
+	exe "cs show"
 endfunction
 
 function! <SID>CACEIsHLESuopprted(type)
 	if strlen(a:type) > 1
 		return 0
 	endif
-	let keys = keys(g:caceHLESupportedGroupMap)
+	let keys = keys(s:caceHLESupportedGroupMap)
 	for key in keys
 		if char2nr(a:type) == char2nr(key)
 			return 1
@@ -395,44 +597,50 @@ function! <SID>CACEIsHLESuopprted(type)
 endfunction
 
 function! <SID>CACEHLEUpdateTrace(index, totle)
-	call <SID>LOGI(" Updating HLEDB, please wait " . string(a:index * 100 / a:totle) . "%")
+	if s:caceAsyncProcess == 1
+		redraw
+		let msg = <SID>CACEGenerateMsg('Updating HLE [' . string(a:index * 100 / a:totle) . '%]')
+		exe 'echom "' . msg . '"'
+		!echo "' . msg . '"'
+	else
+		call <SID>LOGI('Updating HLEDB [' . string(a:index * 100 / a:totle) . '%]')
+	endif
 endfunction
-
-let g:caceHLEUniquePatternDict = {}
 
 function! <SID>CACEUpdateHLE()
 	if g:caceHighlightEnhance == 0
 		return 0
 	endif
-	let tag = findfile(g:caceDBDict["ctags"], ".;")
+	let tag = findfile(s:caceDBDict["ctags"], ".;")
 	if (empty(tag))
-		call <SID>LOGE(" Update HLE failed. Cannot find: " . g:caceDBDict["ctags"])
+		call <SID>LOGE(" Update HLE failed. Cannot find: " . s:caceDBDict["ctags"])
 		return 1
 	endif
-	let taglines = readfile(g:caceDBDict["ctags"])
+	let taglines = readfile(s:caceDBDict["ctags"])
 	if empty(taglines)
-		call <SID>LOGE(" Update HLE failed. Tag is empty: " . g:caceDBDict["ctags"])
+		call <SID>LOGE(" Update HLE failed. Tag is empty: " . s:caceDBDict["ctags"])
 		return 1
 	endif
 
-	let g:caceHLEUniquePatternDict = {}
+	call filter(s:caceHLEUniquePatternDict, 0)
 	let ctagsdict = <SID>CACEParseCtag(taglines)
-	let g:caceHLEUniquePatternDict = {}
+	call filter(s:caceHLEUniquePatternDict, 0)
 
 	let wlines = []
 	let keys = keys(ctagsdict)
 	for key in keys
 		if <SID>CACEIsHLESuopprted(strcharpart(key, 0, 1))
-			call add(wlines, "syntax keyword " . g:caceHLESupportedGroupMap[strcharpart(key, 0, 1)] . " " . ctagsdict[key])
+			call add(wlines, "syntax keyword " . s:caceHLESupportedGroupMap[strcharpart(key, 0, 1)] . " " . ctagsdict[key])
 		endif
 	endfor
+	call <SID>CACECleanDB('hle')
 	if len(wlines)
 		call writefile(wlines, "cscope.tags.hle")
 	endif
 
-	let keys = keys(g:caceHLESupportedGroupMap)
+	let keys = keys(s:caceHLESupportedGroupMap)
 	for key in keys
-		exe "syntax clear " . g:caceHLESupportedGroupMap[key]
+		exe "syntax clear " . s:caceHLESupportedGroupMap[key]
 	endfor
 
 	return 0
@@ -446,9 +654,9 @@ function! <SID>CACEHLEPatternInvalid(pattern)
 	endif
 
 	" keyword cannot be syn-argument. Please check: syn-arguments
-	let keys = keys(g:caceHLEInvalidKeywordDict)
+	let keys = keys(s:caceHLEInvalidKeywordDict)
 	for key in keys
-		let invalidkeywordlist = split(g:caceHLEInvalidKeywordDict[key])
+		let invalidkeywordlist = split(s:caceHLEInvalidKeywordDict[key])
 		for word in invalidkeywordlist
 			if a:pattern == word
 				return 1
@@ -457,10 +665,10 @@ function! <SID>CACEHLEPatternInvalid(pattern)
 	endfor
 
 	" Only highlight a pattern onece
-	if has_key(g:caceHLEUniquePatternDict, a:pattern)
+	if has_key(s:caceHLEUniquePatternDict, a:pattern)
 		return 1
 	else
-		let g:caceHLEUniquePatternDict[a:pattern] = 1
+		let s:caceHLEUniquePatternDict[a:pattern] = 1
 	endif
 
 	return 0
@@ -500,7 +708,7 @@ function! <SID>CACEParseCtag(lines)
 		else
 			let typecnt = split(multitypemap[tagtype], ":")[0]
 			let wordcnt = split(multitypemap[tagtype], ":")[1]
-			if str2nr(wordcnt, 10) < g:caceHLEWordsNumPerLine
+			if str2nr(wordcnt, 10) < s:caceHLEWordsNumPerLine
 				let wordcnt = wordcnt + 1
 			else
 				let wordcnt = "1"
