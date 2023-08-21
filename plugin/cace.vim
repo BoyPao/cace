@@ -91,7 +91,7 @@ if !exists(':Caceupdate')
 endif
 
 if !exists(':Caceupdatehle')
-   command! Caceupdatehle call <SID>CACEUpdateHLE()
+	command! Caceupdatehle call <SID>CACEUpdateHLE()
 endif
 
 if !exists(':Caceclean')
@@ -111,18 +111,20 @@ if !exists(':Cacequickfixtrigger')
 endif
 
 if !exists('g:caceHighlightEnhance')
-   let g:caceHighlightEnhance = 0
+	let g:caceHighlightEnhance = 0
 endif
 
 if version >= 800
-   let s:caceAsyncProcess = 1
+	let s:caceAsyncProcess = 1
 else
-   let s:caceAsyncProcess = 0
+	let s:caceAsyncProcess = 0
 endif
 
 let s:caceCWD = ''
 
 let s:caceJobsDict = {}
+
+let s:cacePendingSInfoQueue = []
 
 let s:caceFinding = 0
 
@@ -198,6 +200,12 @@ hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 c
 hi CACECTagsMacro		guifg=#ad77d4 guibg=NONE guisp=NONE gui=NONE ctermfg=140 ctermbg=NONE cterm=NONE
 
 function! <SID>CACECursorMoved()
+	if s:caceAsyncProcess == 1
+		while len(s:cacePendingSInfoQueue)
+			call <SID>LOGS(s:cacePendingSInfoQueue[0])
+			call remove(s:cacePendingSInfoQueue, 0)
+		endwhile
+	endif
 	let s:caceFinding = 0
 endfunction
 
@@ -308,8 +316,18 @@ function! <SID>CACEFlushJobs()
 	endfor
 endfunction
 
+function! <SID>CACEInfoJobSuccess(str)
+	if s:caceFinding == 0
+		call <SID>LOGS(a:str)
+	else
+		call add(s:cacePendingSInfoQueue, a:str)
+	endif
+endfunction
+
 function! <SID>CACEProgressTrace(step)
-	call <SID>LOGI(' Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
+	if s:caceFinding == 0
+		call <SID>LOGI(' Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
+	endif
 endfunction
 
 function! <SID>CACEJobResponseCb(channel, msg)
@@ -355,7 +373,7 @@ function! <SID>CACECtagsJobExitCb(job, status)
 			call <SID>CACEStartJob('hle')
 		else
 			call <SID>CACEProgressTrace(4)
-			call <SID>LOGS('CACE update success')
+			call <SID>CACEInfoJobSuccess('CACE update success')
 		endif
 	else
 		call <SID>LOGE('Job ctags not finish on exit')
@@ -368,7 +386,7 @@ function! <SID>CACEHLEJobExitCb(job, status)
 		call <SID>CACERemoveJob('hle')
 		call <SID>CACELoadHLEDB()
 		call <SID>CACEProgressTrace(4)
-		call <SID>LOGS('CACE update success')
+		call <SID>CACEInfoJobSuccess('CACE update success')
 		if s:caceCWD != ''
 			exe 'cd ' . s:caceCWD
 		endif
