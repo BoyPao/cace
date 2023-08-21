@@ -12,7 +12,7 @@
 " > Provide command to update cscope & ctags database.
 " > Provide command to search string.
 " > Highlight enhancemant for user defined symbols.
-" > Provide background process by async methmod.
+" > Provide background process for database updating by async methmod.
 
 "==============================================================================
 " Installation:
@@ -36,11 +36,12 @@
 "     use this command at project root.
 "
 " > Caceupdatehle
-"     This command helps updating only hle database.
+"     This command helps updating only highlight database.
 "
 " > Caceclean
-"     This command helps to find then delete the cscope, ctags and highlight
-"     database.
+"     This command helps to delete the cscope, ctags and highlight database.
+"     To prevent deleting database which loacted in uper folder, this command
+"     only performs in current working path.
 "
 " > Cacegrep
 "     This command executes vimgrep from cscope database directory for target
@@ -73,8 +74,9 @@
 " Configuration:
 "==============================================================================
 " > g:caceHighlightEnhance
-"     It supports user defined symbol highlight. The default value is 0.
-"     Please check s:caceHLESupportedGroupMap for supported symbol information.
+"     If the value is 1, it will performs a extral highlight for user defined
+"     symbols. The default value is 0. Please check s:caceHLESupportedGroupMap
+"     for supported symbol informations.
 "     Note: If you turn on this feature, generating/updating database will take
 "     more time. If you mind the time consumption, it's better to keep it as 0.
 
@@ -196,7 +198,7 @@ hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 c
 hi CACECTagsMacro		guifg=#ad77d4 guibg=NONE guisp=NONE gui=NONE ctermfg=140 ctermbg=NONE cterm=NONE
 
 function! <SID>CACECursorMoved()
-   let s:caceFinding = 0
+	let s:caceFinding = 0
 endfunction
 
 function! <SID>CACEGenerateCMD(cmdid, cmdtype)
@@ -258,121 +260,121 @@ function! <SID>CACEGenerateCMD(cmdid, cmdtype)
 endfunction
 
 function! <SID>CACEUpdateDB()
-   if s:caceAsyncProcess == 1
-       let s:caceCWD = getcwd()
-       exe 'cd ' . <SID>CACEGetDBPath('cscope.out')
-       call <SID>CACECleanDB('lst')
-       call <SID>CACEStartJob('lst')
-   else
-       call <SID>CACEUpdateDBSync()
-   endif
+	if s:caceAsyncProcess == 1
+		let s:caceCWD = getcwd()
+		exe 'cd ' . <SID>CACEGetDBPath('cscope.out')
+		call <SID>CACECleanDB('lst')
+		call <SID>CACEStartJob('lst')
+	else
+		call <SID>CACEUpdateDBSync()
+	endif
 endfunction
 
 function! <SID>CACEParseMsg(msg)
-   let eidx = match(a:msg, 'Error')
-   if  eidx >= 0
-       " TODO: how to handle error ?
-       "call <SID>LOGE(strpart(a:msg, eidx, 80))
-       return ''
-   endif
-   let sidx = match(a:msg, s:caceMsgSymbolDict['start'])
-   if sidx < 0
-       return ''
-   endif
-   let sidx = sidx + len(s:caceMsgSymbolDict['start'])
-   let eidx = match(a:msg, s:caceMsgSymbolDict['end'])
-   if eidx < sidx
-       return ''
-   endif
-   return strpart(a:msg, sidx, eidx - sidx )
+	let eidx = match(a:msg, 'Error')
+	if  eidx >= 0
+		" TODO: how to handle error ?
+		"call <SID>LOGE(strpart(a:msg, eidx, 80))
+		return ''
+	endif
+	let sidx = match(a:msg, s:caceMsgSymbolDict['start'])
+	if sidx < 0
+		return ''
+	endif
+	let sidx = sidx + len(s:caceMsgSymbolDict['start'])
+	let eidx = match(a:msg, s:caceMsgSymbolDict['end'])
+	if eidx < sidx
+		return ''
+	endif
+	return strpart(a:msg, sidx, eidx - sidx )
 endfunction
 
 function! <SID>CACERemoveJob(jobname)
-   if !has_key(s:caceJobsDict, a:jobname)
-       return
-   endif
-   call remove(s:caceJobsDict, a:jobname)
+	if !has_key(s:caceJobsDict, a:jobname)
+		return
+	endif
+	call remove(s:caceJobsDict, a:jobname)
 endfunction
 
 function! <SID>CACEFlushJobs()
-   let keys = keys(s:caceJobsDict)
-   for key in keys
-       let job = s:caceJobsDict[key]
-       call job_stop(job)
-       if job_status(job) == 'run'
-           call <SID>LOGE('Failed to stop job ' . key)
-       endif
-       call <SID>CACERemoveJob(key)
-   endfor
+	let keys = keys(s:caceJobsDict)
+	for key in keys
+		let job = s:caceJobsDict[key]
+		call job_stop(job)
+		if job_status(job) == 'run'
+			call <SID>LOGE('Failed to stop job ' . key)
+		endif
+		call <SID>CACERemoveJob(key)
+	endfor
 endfunction
 
 function! <SID>CACEProgressTrace(step)
-   call <SID>LOGI(' Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
+	call <SID>LOGI(' Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
 endfunction
 
 function! <SID>CACEJobResponseCb(channel, msg)
-   let str = <SID>CACEParseMsg(a:msg)
-   if str != ''
-       if s:caceFinding == 0
-           call <SID>LOGI(str)
-       endif
-   endif
+	let str = <SID>CACEParseMsg(a:msg)
+	if str != ''
+		if s:caceFinding == 0
+			call <SID>LOGI(str)
+		endif
+	endif
 endfunction
 
 function! <SID>CACELstJobExitCb(job, status)
-   let info = job_info(a:job)
-   if info['status'] == 'dead'
-       call <SID>CACERemoveJob('lst')
-       call <SID>CACEProgressTrace(1)
-       call <SID>CACECleanDB('cscope')
-       call <SID>CACEStartJob('cscope')
-   else
-       call <SID>LOGE('Job lst not finish on exit')
-   endif
+	let info = job_info(a:job)
+	if info['status'] == 'dead'
+		call <SID>CACERemoveJob('lst')
+		call <SID>CACEProgressTrace(1)
+		call <SID>CACECleanDB('cscope')
+		call <SID>CACEStartJob('cscope')
+	else
+		call <SID>LOGE('Job lst not finish on exit')
+	endif
 endfunction
 
 function! <SID>CACECscopeJobExitCb(job, status)
-   let info = job_info(a:job)
-   if info['status'] == 'dead'
-       call <SID>CACERemoveJob('cscope')
-       call <SID>CACELoadCscopeDB()
-       call <SID>CACEProgressTrace(2)
-       call <SID>CACECleanDB('ctags')
-       call <SID>CACEStartJob('ctags')
-   else
-       call <SID>LOGE('Job cscope not finish on exit')
-   endif
+	let info = job_info(a:job)
+	if info['status'] == 'dead'
+		call <SID>CACERemoveJob('cscope')
+		call <SID>CACELoadCscopeDB()
+		call <SID>CACEProgressTrace(2)
+		call <SID>CACECleanDB('ctags')
+		call <SID>CACEStartJob('ctags')
+	else
+		call <SID>LOGE('Job cscope not finish on exit')
+	endif
 endfunction
 
 function! <SID>CACECtagsJobExitCb(job, status)
-   let info = job_info(a:job)
-   if info['status'] == 'dead'
-       call <SID>CACERemoveJob('ctags')
-       call <SID>CACEProgressTrace(3)
-       if g:caceHighlightEnhance == 1
-           call <SID>CACEStartJob('hle')
-       else
-           call <SID>CACEProgressTrace(4)
-           call <SID>LOGS('CACE update success')
-       endif
-   else
-       call <SID>LOGE('Job ctags not finish on exit')
-   endif
+	let info = job_info(a:job)
+	if info['status'] == 'dead'
+		call <SID>CACERemoveJob('ctags')
+		call <SID>CACEProgressTrace(3)
+		if g:caceHighlightEnhance == 1
+			call <SID>CACEStartJob('hle')
+		else
+			call <SID>CACEProgressTrace(4)
+			call <SID>LOGS('CACE update success')
+		endif
+	else
+		call <SID>LOGE('Job ctags not finish on exit')
+	endif
 endfunction
 
 function! <SID>CACEHLEJobExitCb(job, status)
-   let info = job_info(a:job)
-   if info['status'] == 'dead'
-       call <SID>CACERemoveJob('hle')
-       call <SID>CACELoadHLEDB()
-       call <SID>CACEProgressTrace(4)
-       call <SID>LOGS('CACE update success')
-       if s:caceCWD != ''
-           exe 'cd ' . s:caceCWD
-       endif
-   else
-       call <SID>LOGE('Job hle not finish on exit')
-   endif
+	let info = job_info(a:job)
+	if info['status'] == 'dead'
+		call <SID>CACERemoveJob('hle')
+		call <SID>CACELoadHLEDB()
+		call <SID>CACEProgressTrace(4)
+		call <SID>LOGS('CACE update success')
+		if s:caceCWD != ''
+			exe 'cd ' . s:caceCWD
+		endif
+	else
+		call <SID>LOGE('Job hle not finish on exit')
+	endif
 endfunction
 
 let s:caceJobsOptions = {
@@ -411,13 +413,13 @@ let s:caceJobsOptions = {
            \ }
 
 function! <SID>CACEStartJob(jobname)
-   let cmd = <SID>CACEGenerateCMD(s:caceJobCmdId[a:jobname], 'lst')
-   let options = s:caceJobsOptions[a:jobname]
-   let s:caceJobsDict[a:jobname] = job_start(cmd, options)
-   let jobstatus = job_status(s:caceJobsDict[a:jobname])
-   if jobstatus != 'run'
-       call <SID>LOGE('faild to start async job for DB update')
-   endif
+	let cmd = <SID>CACEGenerateCMD(s:caceJobCmdId[a:jobname], 'lst')
+	let options = s:caceJobsOptions[a:jobname]
+	let s:caceJobsDict[a:jobname] = job_start(cmd, options)
+	let jobstatus = job_status(s:caceJobsDict[a:jobname])
+	if jobstatus != 'run'
+		call <SID>LOGE('faild to start async job for DB update')
+	endif
 endfunction
 
 function! <SID>CACECscopeQuickfixTrigger()

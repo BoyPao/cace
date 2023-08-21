@@ -10,6 +10,7 @@ Copyright (c) 2021 Peng Hao <635945005@qq.com>
 - Provide command to update cscope & ctags database.
 - Provide command to search string.
 - Highlight enhancemant for user defined symbols.
+- Provide background process for database updating by async methmod.
 
 # Installation
 - Install manually
