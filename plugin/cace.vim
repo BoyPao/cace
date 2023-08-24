@@ -80,34 +80,34 @@
 "     Note: If you turn on this feature, generating/updating database will take
 "     more time. If you mind the time consumption, it's better to keep it as 0.
 
-autocmd BufEnter /* call <SID>CACELoadDB()
-autocmd VimLeavePre /* call <SID>CACEFlushJobs()
-autocmd CursorMoved /* call <SID>CACECursorMoved()
+autocmd BufEnter /* call s:CACELoadDB()
+autocmd VimLeavePre /* call s:CACEFlushJobs()
+autocmd CursorMoved /* call s:CACECursorMoved()
 
 set tags=tags;
 
 if !exists(':Caceupdate')
-	command! Caceupdate call <SID>CACEUpdateDB()
+	command! Caceupdate call s:CACEUpdateDB()
 endif
 
 if !exists(':Caceupdatehle')
-	command! Caceupdatehle call <SID>CACEUpdateHLE()
+	command! Caceupdatehle call s:CACEUpdateHLE()
 endif
 
 if !exists(':Caceclean')
-	command! Caceclean call <SID>CACECleanDB('all')
+	command! Caceclean call s:CACECleanDB('all')
 endif
 
 if !exists(':Cacegrep')
-	command! -nargs=1 Cacegrep call <SID>CACEGrepFunc(<q-args>)
+	command! -nargs=1 Cacegrep call s:CACEGrepFunc(<q-args>)
 endif
 
 if !exists(':Cacefind')
-	command! -nargs=+ Cacefind call <SID>CACEcscopeFind(<f-args>)
+	command! -nargs=+ Cacefind call s:CACEcscopeFind(<f-args>)
 endif
 
 if !exists(':Cacequickfixtrigger')
-	command! Cacequickfixtrigger call <SID>CACECscopeQuickfixTrigger()
+	command! Cacequickfixtrigger call s:CACECscopeQuickfixTrigger()
 endif
 
 if !exists('g:caceHighlightEnhance')
@@ -210,17 +210,17 @@ hi CACECTagsEnumName	guifg=#4ed99b guibg=NONE guisp=NONE gui=NONE ctermfg=79 cte
 hi CACECTagsEnumValue	guifg=#2ea303 guibg=NONE guisp=NONE gui=NONE ctermfg=121 ctermbg=NONE cterm=NONE
 hi CACECTagsMacro		guifg=#ad77d4 guibg=NONE guisp=NONE gui=NONE ctermfg=140 ctermbg=NONE cterm=NONE
 
-function! <SID>CACECursorMoved()
+function! s:CACECursorMoved()
 	if s:caceAsyncProcess == 1
 		while len(s:cacePendingSInfoQueue)
-			call <SID>LOGS(s:cacePendingSInfoQueue[0])
+			call s:LOGS(s:cacePendingSInfoQueue[0])
 			call remove(s:cacePendingSInfoQueue, 0)
 		endwhile
 	endif
 	let s:caceFinding = 0
 endfunction
 
-function! <SID>CACEDumpErrorInfo()
+function! s:CACEDumpErrorInfo()
 	while len(s:cacePendingEInfoQueue)
 		if s:cacePendingEInfoQueue[0] != ''
 			" use echoe instead of LOGE to prevent redraw
@@ -230,8 +230,8 @@ function! <SID>CACEDumpErrorInfo()
 	endwhile
 endfunction
 
-function! <SID>CACEGenerateCMD(cmdid)
-	let tdict = <SID>CACEGetTargetDict()
+function! s:CACEGenerateCMD(cmdid)
+	let tdict = s:CACEGetTargetDict()
 	let keys = keys(tdict)
 	let cmdlist = []
 	let cmd = ""
@@ -272,31 +272,31 @@ function! <SID>CACEGenerateCMD(cmdid)
 	elseif a:cmdid == "CACECMD_HLE"
 		call add(cmdlist, 'vim +Caceupdatehle +q')
 	else
-		call <SID>LOGE("Unknown CMD tyep:" . a:cmdid)
+		call s:LOGE("Unknown CMD tyep:" . a:cmdid)
 	endif
 	let cmd = join(cmdlist)
 	return cmd
 endfunction
 
-function! <SID>CACEUpdateDB()
+function! s:CACEUpdateDB()
 	if s:caceAsyncProcess == 1
 		let s:caceCWD = getcwd()
-		exe 'cd ' . <SID>CACEGetDBPath('cscope.out')
-		call <SID>CACECleanDB('lst')
-		call <SID>CACEStartJob('lst')
+		exe 'cd ' . s:CACEGetDBPath('cscope.out')
+		call s:CACECleanDB('lst')
+		call s:CACEStartJob('lst')
 	else
-		call <SID>CACEUpdateDBSync()
+		call s:CACEUpdateDBSync()
 	endif
 endfunction
 
-function! <SID>CACERemoveJob(jobname)
+function! s:CACERemoveJob(jobname)
 	if !has_key(s:caceJobsDict, a:jobname)
 		return
 	endif
 	call remove(s:caceJobsDict, a:jobname)
 endfunction
 
-function! <SID>CACEFlushJobs()
+function! s:CACEFlushJobs()
 	let keys = keys(s:caceJobsDict)
 	for key in keys
 		let cnt = 0
@@ -309,20 +309,20 @@ function! <SID>CACEFlushJobs()
 			let cnt = cnt + 1
 		endwhile
 		if job_status(job) == 'run'
-			call <SID>LOGE('Failed to stop job ' . key)
+			call s:LOGE('Failed to stop job ' . key)
 		endif
-		call <SID>CACERemoveJob(key)
+		call s:CACERemoveJob(key)
 	endfor
 endfunction
 
-function! <SID>CACEParseMsg(msg)
+function! s:CACEParseMsg(msg)
 	let errs = -1
 	let erre = -1
 	let eqcnt = len(s:cacePendingEInfoQueue)
 	if eqcnt > 8
 		return ''
 	elseif eqcnt == 8
-		call <SID>CACEFlushJobs()
+		call s:CACEFlushJobs()
 		return ''
 	elseif eqcnt > 0 && eqcnt < 8
 		let errs = match(a:msg, 'E\d')
@@ -361,142 +361,142 @@ function! <SID>CACEParseMsg(msg)
 	return strcharpart(a:msg, sidx, eidx - sidx )
 endfunction
 
-function! <SID>CACEInfoJobSuccess(str)
+function! s:CACEInfoJobSuccess(str)
 	if s:caceFinding == 0
-		call <SID>LOGS(a:str)
+		call s:LOGS(a:str)
 	else
 		call add(s:cacePendingSInfoQueue, a:str)
 	endif
 endfunction
 
-function! <SID>CACEProgressTrace(step)
+function! s:CACEProgressTrace(step)
 	if s:caceFinding == 0
-		call <SID>LOGI('Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
+		call s:LOGI('Updating DB [' . string(a:step) . '/' . len(s:caceDBDict) . ']')
 	endif
 endfunction
 
-function! <SID>CACEJobResponseCb(channel, msg)
-	let str = <SID>CACEParseMsg(a:msg)
+function! s:CACEJobResponseCb(channel, msg)
+	let str = s:CACEParseMsg(a:msg)
 	if str != ''
 		if s:caceFinding == 0
-			call <SID>LOGI(str)
+			call s:LOGI(str)
 		endif
 	endif
 endfunction
 
-function! <SID>CACELstJobExitCb(job, status)
+function! s:CACELstJobExitCb(job, status)
 	let info = job_info(a:job)
 	if info['status'] == 'dead'
-		call <SID>CACERemoveJob('lst')
+		call s:CACERemoveJob('lst')
 		if len(s:cacePendingEInfoQueue)
-			call <SID>CACEDumpErrorInfo()
+			call s:CACEDumpErrorInfo()
 			if s:caceCWD != ''
 				exe 'cd ' . s:caceCWD
 			endif
 			return
 		endif
-		call <SID>CACEProgressTrace(1)
+		call s:CACEProgressTrace(1)
 		let s:caceSkipCscopeReset = 1
-		call <SID>CACECleanDB('cscope')
-		call <SID>CACEStartJob('cscope')
+		call s:CACECleanDB('cscope')
+		call s:CACEStartJob('cscope')
 	else
-		call <SID>LOGE('Job lst not finish on exit')
+		call s:LOGE('Job lst not finish on exit')
 	endif
 endfunction
 
-function! <SID>CACECscopeJobExitCb(job, status)
+function! s:CACECscopeJobExitCb(job, status)
 	let info = job_info(a:job)
 	if info['status'] == 'dead'
-		call <SID>CACERemoveJob('cscope')
+		call s:CACERemoveJob('cscope')
 		if len(s:cacePendingEInfoQueue)
-			call <SID>CACEDumpErrorInfo()
+			call s:CACEDumpErrorInfo()
 			if s:caceCWD != ''
 				exe 'cd ' . s:caceCWD
 			endif
 			return
 		endif
-		call <SID>CACELoadCscopeDB()
-		call <SID>CACEProgressTrace(2)
-		call <SID>CACECleanDB('ctags')
-		call <SID>CACEStartJob('ctags')
+		call s:CACELoadCscopeDB()
+		call s:CACEProgressTrace(2)
+		call s:CACECleanDB('ctags')
+		call s:CACEStartJob('ctags')
 	else
-		call <SID>LOGE('Job cscope not finish on exit')
+		call s:LOGE('Job cscope not finish on exit')
 	endif
 endfunction
 
-function! <SID>CACECtagsJobExitCb(job, status)
+function! s:CACECtagsJobExitCb(job, status)
 	let info = job_info(a:job)
 	if info['status'] == 'dead'
-		call <SID>CACERemoveJob('ctags')
+		call s:CACERemoveJob('ctags')
 		if len(s:cacePendingEInfoQueue)
-			call <SID>CACEDumpErrorInfo()
+			call s:CACEDumpErrorInfo()
 			if s:caceCWD != ''
 				exe 'cd ' . s:caceCWD
 			endif
 			return
 		endif
-		call <SID>CACEProgressTrace(3)
+		call s:CACEProgressTrace(3)
 		if g:caceHighlightEnhance == 1
-			call <SID>CACEStartJob('hle')
+			call s:CACEStartJob('hle')
 		else
-			call <SID>CACEProgressTrace(4)
-			call <SID>CACEInfoJobSuccess('CACE update success')
+			call s:CACEProgressTrace(4)
+			call s:CACEInfoJobSuccess('CACE update success')
 		endif
 	else
-		call <SID>LOGE('Job ctags not finish on exit')
+		call s:LOGE('Job ctags not finish on exit')
 	endif
 endfunction
 
-function! <SID>CACEHLEJobExitCb(job, status)
+function! s:CACEHLEJobExitCb(job, status)
 	let info = job_info(a:job)
 	if info['status'] == 'dead'
-		call <SID>CACERemoveJob('hle')
+		call s:CACERemoveJob('hle')
 		if len(s:cacePendingEInfoQueue)
-			call <SID>CACEDumpErrorInfo()
+			call s:CACEDumpErrorInfo()
 			if s:caceCWD != ''
 				exe 'cd ' . s:caceCWD
 			endif
 			return
 		endif
-		call <SID>CACELoadHLEDB()
-		call <SID>CACEProgressTrace(4)
-		call <SID>CACEInfoJobSuccess('CACE update success')
+		call s:CACELoadHLEDB()
+		call s:CACEProgressTrace(4)
+		call s:CACEInfoJobSuccess('CACE update success')
 		if s:caceCWD != ''
 			exe 'cd ' . s:caceCWD
 		endif
 	else
-		call <SID>LOGE('Job hle not finish on exit')
+		call s:LOGE('Job hle not finish on exit')
 	endif
 endfunction
 
 let s:caceJobsOptions = {
 			\ 'lst' : {
-				\ 'callback' : function('<SID>CACEJobResponseCb'),
-				\ 'exit_cb' : function('<SID>CACELstJobExitCb'),
+				\ 'callback' : function('s:CACEJobResponseCb'),
+				\ 'exit_cb' : function('s:CACELstJobExitCb'),
 				\ 'out_io' : 'pipe',
 				\ 'err_io' : 'out',
 				\ 'timeout' : 2000,
 				\ 'out_timeout' : 10000
 				\ },
 			\ 'cscope' : {
-				\ 'callback' : function('<SID>CACEJobResponseCb'),
-				\ 'exit_cb' : function('<SID>CACECscopeJobExitCb'),
+				\ 'callback' : function('s:CACEJobResponseCb'),
+				\ 'exit_cb' : function('s:CACECscopeJobExitCb'),
 				\ 'out_io' : 'pipe',
 				\ 'err_io' : 'out',
 				\ 'timeout' : 2000,
 				\ 'out_timeout' : 10000
 				\ },
 			\ 'ctags' : {
-				\ 'callback' : function('<SID>CACEJobResponseCb'),
-				\ 'exit_cb' : function('<SID>CACECtagsJobExitCb'),
+				\ 'callback' : function('s:CACEJobResponseCb'),
+				\ 'exit_cb' : function('s:CACECtagsJobExitCb'),
 				\ 'out_io' : 'pipe',
 				\ 'err_io' : 'out',
 				\ 'timeout' : 2000,
 				\ 'out_timeout' : 10000
 				\ },
 			\ 'hle' : {
-				\ 'callback' : function('<SID>CACEJobResponseCb'),
-				\ 'exit_cb' : function('<SID>CACEHLEJobExitCb'),
+				\ 'callback' : function('s:CACEJobResponseCb'),
+				\ 'exit_cb' : function('s:CACEHLEJobExitCb'),
 				\ 'out_io' : 'pipe',
 				\ 'err_io' : 'out',
 				\ 'timeout' : 2000,
@@ -504,47 +504,47 @@ let s:caceJobsOptions = {
 				\ }
 			\ }
 
-function! <SID>CACEStartJob(jobname)
+function! s:CACEStartJob(jobname)
 	if len(s:caceJobsDict)
 		return
 	endif
 	let cmdlst = []
 	call add(cmdlst, '/bin/sh')
 	call add(cmdlst, '-c')
-	let cmd = <SID>CACEGenerateCMD(s:caceJobCmdId[a:jobname])
+	let cmd = s:CACEGenerateCMD(s:caceJobCmdId[a:jobname])
 	call add(cmdlst, cmd)
 	let options = s:caceJobsOptions[a:jobname]
 	let s:caceJobsDict[a:jobname] = job_start(cmdlst, options)
 	let jobstatus = job_status(s:caceJobsDict[a:jobname])
 	if jobstatus != 'run'
-		call <SID>LOGE('faild to start async job for DB update')
+		call s:LOGE('faild to start async job for DB update')
 	endif
 endfunction
 
-function! <SID>CACECscopeQuickfixTrigger()
+function! s:CACECscopeQuickfixTrigger()
 	if &cscopequickfix==""
 		setlocal cscopequickfix=s-,c-,d-,i-,t-,e-
 	else
 		setlocal cscopequickfix=
 	endif
-	call <SID>LOG("cscopequickfix=" . &cscopequickfix)
+	call s:LOG("cscopequickfix=" . &cscopequickfix)
 endfunction
 
-function! <SID>CACEGrepFunc(target)
+function! s:CACEGrepFunc(target)
 	let s:caceCWD = getcwd()
-	exe "cd " . <SID>CACEGetDBPath("cscope.out")
-	call <SID>LOGI("Searching ...")
-	exe "silent vimgrep /" . a:target . <SID>CACEGenerateCMD('CACECMD_GREP')
+	exe "cd " . s:CACEGetDBPath("cscope.out")
+	call s:LOGI("Searching ...")
+	exe "silent vimgrep /" . a:target . s:CACEGenerateCMD('CACECMD_GREP')
 	redraw
-	call <SID>LOGI(" ")
+	call s:LOGI(" ")
 	exe "cd " . s:caceCWD
 	let @/ = a:target
 	exe "copen"
 endfunction
 
-function! <SID>CACEcscopeFind(mode, target)
+function! s:CACEcscopeFind(mode, target)
 	if !has_key(s:caceCscopeFindModeDict, a:mode) || s:caceCscopeFindModeDict[a:mode] != 1
-		call <SID>LOGE("Invalid mode: " . a:mode)
+		call s:LOGE("Invalid mode: " . a:mode)
 		return
 	endif
 	let s:caceFinding = 1
@@ -554,7 +554,7 @@ function! <SID>CACEcscopeFind(mode, target)
 	endif
 endfunction
 
-function! <SID>CACEGetTargetDict()
+function! s:CACEGetTargetDict()
 	let tdict = {}
 	let namelist = []
 	let typelist = []
@@ -574,9 +574,9 @@ function! <SID>CACEGetTargetDict()
 	return tdict
 endfunction
 
-function! <SID>CACELoadHLEDB()
+function! s:CACELoadHLEDB()
 	let filetype = expand('%:e')
-	let tdict = <SID>CACEGetTargetDict()
+	let tdict = s:CACEGetTargetDict()
 	let keys = keys(tdict)
 	let typevalid = 0
 	for key in keys
@@ -605,7 +605,7 @@ function! <SID>CACELoadHLEDB()
 	exe "source " . hledb
 endfunction
 
-function! <SID>CACELoadCscopeDB()
+function! s:CACELoadCscopeDB()
 	if !s:caceSkipCscopeReset
 		" kill will disconnect db. but will leads find error. Use reset instead.
 		silent exe "cs reset"
@@ -623,19 +623,19 @@ function! <SID>CACELoadCscopeDB()
 	endif
 endfunction
 
-function! <SID>CACELoadDB()
-	call <SID>CACELoadCscopeDB()
+function! s:CACELoadDB()
+	call s:CACELoadCscopeDB()
 	if g:caceHighlightEnhance == 1
-		call <SID>CACELoadHLEDB()
+		call s:CACELoadHLEDB()
 	endif
 	return 0
 endfunction
 
-function! <SID>CACEGenerateMsg(str)
+function! s:CACEGenerateMsg(str)
 	return s:caceMsgSymbolDict["start"] . a:str . s:caceMsgSymbolDict["end"]
 endfunction
 
-function! <SID>CACEGetDBPath(dbname)
+function! s:CACEGetDBPath(dbname)
 	let db = findfile(a:dbname, getcwd() . ";")
 	let dbpath = getcwd()
 	if (!empty(db))
@@ -646,7 +646,7 @@ function! <SID>CACEGetDBPath(dbname)
 	return dbpath
 endfunction
 
-function! <SID>CACECleanDB(target)
+function! s:CACECleanDB(target)
 	let keys = keys(s:caceDBDict)
 	for key in keys
 		if a:target == 'all' || a:target == key
@@ -661,35 +661,35 @@ function! <SID>CACECleanDB(target)
 	endfor
 endfunction
 
-function! <SID>CACEUpdateDBSync()
+function! s:CACEUpdateDBSync()
 	let rt = 0
 	let s:caceCWD = getcwd()
-	exe "cd " . <SID>CACEGetDBPath("cscope.out")
-	call <SID>CACECleanDB('lst')
-	call system(<SID>CACEGenerateCMD('CACECMD_LST'))
-	call <SID>CACEProgressTrace(1)
-	call <SID>CACECleanDB('cscope')
+	exe "cd " . s:CACEGetDBPath("cscope.out")
+	call s:CACECleanDB('lst')
+	call system(s:CACEGenerateCMD('CACECMD_LST'))
+	call s:CACEProgressTrace(1)
+	call s:CACECleanDB('cscope')
 	call system('cscope -bkq -i cscope.tags.lst')
-	call <SID>CACELoadCscopeDB()
-	call <SID>CACEProgressTrace(2)
-	call <SID>CACECleanDB('ctags')
+	call s:CACELoadCscopeDB()
+	call s:CACEProgressTrace(2)
+	call s:CACECleanDB('ctags')
 	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
-	call <SID>CACEProgressTrace(3)
-	let rt = <SID>CACEUpdateHLE()
+	call s:CACEProgressTrace(3)
+	let rt = s:CACEUpdateHLE()
 	if rt
 		return
 	endif
-	call <SID>CACELoadHLEDB()
-	call <SID>CACEProgressTrace(4)
+	call s:CACELoadHLEDB()
+	call s:CACEProgressTrace(4)
 	if rt
 		return
 	endif
 	exe "cd " . s:caceCWD
-	call <SID>LOGS("CACE update success\n")
+	call s:LOGS("CACE update success\n")
 	exe "cs show"
 endfunction
 
-function! <SID>CACEIsHLESuopprted(type)
+function! s:CACEIsHLESuopprted(type)
 	if strlen(a:type) > 1
 		return 0
 	endif
@@ -702,44 +702,44 @@ function! <SID>CACEIsHLESuopprted(type)
 	return 0
 endfunction
 
-function! <SID>CACEHLEUpdateTrace(index, total)
+function! s:CACEHLEUpdateTrace(index, total)
 	if s:caceAsyncProcess == 1
 		redraw
-		let msg = <SID>CACEGenerateMsg('Updating HLE [' . string(a:index * 100 / a:total) . '%]')
+		let msg = s:CACEGenerateMsg('Updating HLE [' . string(a:index * 100 / a:total) . '%]')
 		exe 'echom "' . msg . '"'
 		!echo ''
 	else
-		call <SID>LOGI('Updating HLEDB [' . string(a:index * 100 / a:total) . '%]')
+		call s:LOGI('Updating HLEDB [' . string(a:index * 100 / a:total) . '%]')
 	endif
 endfunction
 
-function! <SID>CACEUpdateHLE()
+function! s:CACEUpdateHLE()
 	if g:caceHighlightEnhance == 0
 		return 0
 	endif
 	let tag = findfile(s:caceDBDict["ctags"], ".;")
 	if (empty(tag))
-		call <SID>LOGE("Update HLE failed. Cannot find: " . s:caceDBDict["ctags"])
+		call s:LOGE("Update HLE failed. Cannot find: " . s:caceDBDict["ctags"])
 		return 1
 	endif
 	let taglines = readfile(s:caceDBDict["ctags"])
 	if empty(taglines)
-		call <SID>LOGE("Update HLE failed. Tag is empty: " . s:caceDBDict["ctags"])
+		call s:LOGE("Update HLE failed. Tag is empty: " . s:caceDBDict["ctags"])
 		return 1
 	endif
 
 	call filter(s:caceHLEUniquePatternDict, 0)
-	let ctagsdict = <SID>CACEParseCtag(taglines)
+	let ctagsdict = s:CACEParseCtag(taglines)
 	call filter(s:caceHLEUniquePatternDict, 0)
 
 	let wlines = []
 	let keys = keys(ctagsdict)
 	for key in keys
-		if <SID>CACEIsHLESuopprted(strcharpart(key, 0, 1))
+		if s:CACEIsHLESuopprted(strcharpart(key, 0, 1))
 			call add(wlines, "syntax keyword " . s:caceHLESupportedGroupMap[strcharpart(key, 0, 1)] . " " . ctagsdict[key])
 		endif
 	endfor
-	call <SID>CACECleanDB('hle')
+	call s:CACECleanDB('hle')
 	if len(wlines)
 		call writefile(wlines, "cscope.tags.hle")
 	endif
@@ -752,7 +752,7 @@ function! <SID>CACEUpdateHLE()
 	return 0
 endfunction
 
-function! <SID>CACEHLEPatternInvalid(pattern)
+function! s:CACEHLEPatternInvalid(pattern)
 	" Single char is not expected to be highlighted
 	" Vim highlight spec: keyword length < 80. Please check: syn-keyword
 	if strlen(a:pattern) < 2 || strlen(a:pattern) > 80
@@ -780,7 +780,7 @@ function! <SID>CACEHLEPatternInvalid(pattern)
 	return 0
 endfunction
 
-function! <SID>CACEParseCtag(lines)
+function! s:CACEParseCtag(lines)
 	let ctagsdict = {}
 	let multitypemap = {}
 	let linenum = len(a:lines)
@@ -796,7 +796,7 @@ function! <SID>CACEParseCtag(lines)
 		endif
 		let tagtype = split(tmp[1])[0]
 
-		if !<SID>CACEIsHLESuopprted(tagtype)
+		if !s:CACEIsHLESuopprted(tagtype)
 			continue
 		endif
 
@@ -804,7 +804,7 @@ function! <SID>CACEParseCtag(lines)
 		if  len(split(pattern, "::")) > 1
 			let pattern = split(pattern, "::")[len(split(pattern, "::")) - 1]
 		endif
-		if <SID>CACEHLEPatternInvalid(pattern)
+		if s:CACEHLEPatternInvalid(pattern)
 			continue
 		endif
 
@@ -832,30 +832,30 @@ function! <SID>CACEParseCtag(lines)
 		endif
 
 		if linecnt % 100 == 0
-			call <SID>CACEHLEUpdateTrace(linecnt, linenum)
+			call s:CACEHLEUpdateTrace(linecnt, linenum)
 		endif
 	endfor
 	return ctagsdict
 endfunction
 
-function! <SID>LOG(str)
+function! s:LOG(str)
 	let newstr = ' ' . a:str
 	echo newstr
 endfunction
-function! <SID>LOGI(str)
+function! s:LOGI(str)
 	let newstr = ' ' . a:str
 	redraw
 	echohl Type | echo newstr | echohl None
 endfunction
-function! <SID>LOGW(str)
+function! s:LOGW(str)
 	let newstr = ' ' . a:str
 	echohl WarningMsg | echo newstr | echohl None
 endfunction
-function! <SID>LOGE(str)
+function! s:LOGE(str)
 	let newstr = ' ' . a:str
 	echohl ErrorMsg | echo newstr | echohl None
 endfunction
-function! <SID>LOGS(str)
+function! s:LOGS(str)
 	let newstr = ' ' . a:str
 	redraw
 	echohl Comment | echo newstr | echohl None
