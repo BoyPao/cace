@@ -132,8 +132,6 @@ let s:caceFinding = 0
 
 let s:caceRetryCnt = 3
 
-let s:caceSkipCscopeReset = 0
-
 let s:caceMsgSymbolDict = {
 			\ 'start' : 'CACE-S',
 			\ 'end' : 'CACE-E'
@@ -396,7 +394,6 @@ function! s:CACELstJobExitCb(job, status)
 			return
 		endif
 		call s:CACEProgressTrace(1)
-		let s:caceSkipCscopeReset = 1
 		call s:CACECleanDB('cscope')
 		call s:CACEStartJob('cscope')
 	else
@@ -606,20 +603,18 @@ function! s:CACELoadHLEDB()
 endfunction
 
 function! s:CACELoadCscopeDB()
-	if !s:caceSkipCscopeReset
-		" kill will disconnect db. but will leads find error. Use reset instead.
-		silent exe "cs reset"
-	endif
+	setlocal nocscopeverbose
+	" kill will disconnect db. but will leads find error. Use reset instead.
+	silent exe "cs reset"
+	setlocal cscopeverbose
 	let db = findfile("cscope.out", ".;")
 	if (!empty(db))
 		let path = strpart(db, 0, match(db, "/cscope.out$"))
 		setlocal nocscopeverbose
 		exe "cs add " . db . " " . path
-		let s:caceSkipCscopeReset = 0
 		setlocal cscopeverbose
 	elseif $CSCOPE_DB != ""
 		exe "cs add " . $CSCOPE_DB
-		let s:caceSkipCscopeReset = 0
 	endif
 endfunction
 
