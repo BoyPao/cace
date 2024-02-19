@@ -11,7 +11,7 @@
 " > Autoload cscope & ctags database
 " > Provide command to update cscope & ctags database.
 " > Provide command to search string.
-" > Highlight enhancemant for user defined symbols.
+" > Highlight enhancement for user defined symbols.
 " > Provide background process for database updating by async methmod.
 
 "==============================================================================
@@ -114,6 +114,10 @@ if !exists('g:caceHighlightEnhance')
 	let g:caceHighlightEnhance = 0
 endif
 
+if !exists('g:caceStdLibInc')
+	let g:caceStdLibInc = 0
+endif
+
 if version >= 800
 	let s:caceAsyncProcess = 1
 else
@@ -171,7 +175,8 @@ let s:caceCscopeFindModeDict = {
 			\ 'd' : 1,
 			\ 'e' : 1,
 			\ 'f' : 1,
-			\ 'i' : 1
+			\ 'i' : 1,
+			\ 'a' : 1
 			\ }
 
 " CACE-HLE(Highlight Enhancement) supported tag type:
@@ -264,7 +269,11 @@ function! s:CACEGenerateCMD(cmdid)
 		endfor
 		call add(cmdlist, "> cscope.tags.lst")
 	elseif a:cmdid == "CACECMD_CSCOPE"
-		call add(cmdlist, 'cscope -bkq -i cscope.tags.lst')
+		if g:caceStdLibInc == 1
+			call add(cmdlist, 'cscope -bq -I /usr/include/ -i cscope.tags.lst')
+		else
+			call add(cmdlist, 'cscope -bkq -i cscope.tags.lst')
+		endif
 	elseif a:cmdid == "CACECMD_CTAGS"
 		call add(cmdlist, 'ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
 	elseif a:cmdid == "CACECMD_HLE"
@@ -664,11 +673,11 @@ function! s:CACEUpdateDBSync()
 	call system(s:CACEGenerateCMD('CACECMD_LST'))
 	call s:CACEProgressTrace(1)
 	call s:CACECleanDB('cscope')
-	call system('cscope -bkq -i cscope.tags.lst')
+	call system(s:CACEGenerateCMD('CACECMD_CSCOPE'))
 	call s:CACELoadCscopeDB()
 	call s:CACEProgressTrace(2)
 	call s:CACECleanDB('ctags')
-	call system('ctags -R --c++-kinds=+p --fields=+iaS --extra=+q < cscope.tags.lst')
+	call system(s:CACEGenerateCMD('CACECMD_CTAGS'))
 	call s:CACEProgressTrace(3)
 	let rt = s:CACEUpdateHLE()
 	if rt
