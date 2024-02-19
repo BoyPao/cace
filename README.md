@@ -9,7 +9,7 @@ Copyright (c) 2021 Peng Hao <635945005@qq.com>
 - Autoload cscope & ctags database
 - Provide command to update cscope & ctags database.
 - Provide command to search string.
-- Highlight enhancemant for user defined symbols.
+- Highlight enhancement for user defined symbols.
 - Provide background process for database updating by async methmod.
 
 # Installation
